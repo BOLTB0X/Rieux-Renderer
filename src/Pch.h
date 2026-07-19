@@ -1,7 +1,7 @@
 #pragma once
 
 // ==========================================
-// 1. 매크로 충돌 방지 설정 (가장 중요!)
+// 매크로 충돌 방지 설정
 // ==========================================
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -12,7 +12,7 @@
 #endif
 
 // ==========================================
-// 2. C/C++ 표준 라이브러리 (Windows.h 보다 무조건 위에 배치!)
+// 2. C/C++ 표준 라이브러리
 // ==========================================
 #include <iostream>
 #include <fstream>
@@ -30,7 +30,7 @@
 #include <exception>
 
 // ==========================================
-// 3. Windows 및 DirectX 핵심
+// Windows 및 DirectX 핵심
 // ==========================================
 #include <windows.h>
 #include <objbase.h>
@@ -48,7 +48,7 @@
 #include <directxcolors.h>
 
 // ==========================================
-// 4. DirectXTK12
+// DirectXTK12
 // ==========================================
 #include <SimpleMath.h>
 #include <SpriteBatch.h>
@@ -58,14 +58,14 @@
 #include <CommonStates.h>
 
 // ==========================================
-// 5. Assimp
+// Assimp
 // ==========================================
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
 // ==========================================
-// 6. Third Party (spdlog, imgui)
+// Third Party (spdlog, imgui)
 // ==========================================
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/msvc_sink.h>
