@@ -1,6 +1,9 @@
 #include "Pch.h"
 #include "System.h"
 #include "Window.h"
+// Core/
+#include "Renderer.h"
+#include "RendererState.h"
 
 System* ApplicationHandle = nullptr;
 
@@ -20,6 +23,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT umessage, WPARAM wparam, LPARAM lparam)
 
 System::System() {
     m_Window = std::make_unique<Window>();
+	m_Renderer = std::make_unique<Renderer>();
     ApplicationHandle = this;
 } // System
 
@@ -32,6 +36,11 @@ bool System::Init() {
         spdlog::error("Window Init Failed!");
         return false;
     }
+
+    if (!m_Renderer->Init(m_Window->GetHwnd(), RendererState::ScreenWidth, RendererState::ScreenHeight)) {
+        spdlog::error("Renderer Init Failed!");
+        return false;
+	}
 
     return true;
 } // Init
@@ -56,7 +65,7 @@ void System::Run() {
             DispatchMessage(&msg);
         }
         else {
-            Sleep(1);
+            m_Renderer->Frame();
         }
     }
 } // Run

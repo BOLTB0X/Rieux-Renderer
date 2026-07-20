@@ -4,6 +4,7 @@
 #include <windows.h>
 
 class Window;
+class Renderer;
 
 class System {
 public:
@@ -19,7 +20,8 @@ public:
     LRESULT CALLBACK MessageHandler(HWND, UINT, WPARAM, LPARAM);
 
 private:
-    std::unique_ptr<Window> m_Window;
+    std::unique_ptr<Window>   m_Window;
+	std::unique_ptr<Renderer> m_Renderer;
 }; // System
 
 extern System* ApplicationHandle;
