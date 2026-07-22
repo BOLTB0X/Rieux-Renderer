@@ -34,6 +34,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Core"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/System"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Components"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Managers"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Resources"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utils"
 )
 
