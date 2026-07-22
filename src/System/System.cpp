@@ -5,11 +5,11 @@
 #include "Timer.h"
 #include "CPU.h"
 #include "FPS.h"
-// Core/
+// Core
 #include "Renderer.h"
 #include "RendererState.h"
 // Graphics
-#include "Components/ImGuiManager.h"
+#include "Managers/ImGuiManager.h"
 // imgui
 #include "imgui.h"
 #include "imgui_impl_dx12.h"

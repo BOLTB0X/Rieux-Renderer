@@ -7,10 +7,13 @@
 #include <dxcapi.h>
 #include <DirectXMath.h>
 #include <string>
+#include <memory>
 
 class Camera;
 class DirectionalLight;
 class GPUMonitor;
+class TextureManager;
+class DescriptorHeapAllocator;
 class ImGuiManager;
 
 class Renderer {
@@ -58,13 +61,13 @@ public:
 private:
     bool Render();
     bool LoadPipeline(HWND, int, int);
-    bool LoadAssets();
+    bool LoadAssets(HWND);
     bool LoadGUIs(HWND, std::shared_ptr<ImGuiManager>);
 
+    bool InitSharedDescriptorHeap();
     bool InitCommonCBs();
     void UpdateCommonCBs();
-	void ShutdownCommonCBs();
-
+    void ShutdownCommonCBs();
 
     void PopulateCommandList();
     void WaitForPreviousFrame();
@@ -72,12 +75,14 @@ private:
     void OnGUI();
 
 private:
-    static const UINT FrameCount = 2; // 더블 버퍼링
+    static const UINT FrameCount = 2;
 
-    struct Vertex {
-        DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT4 color;
-    };
+    // CBV(FrameCB, DirectionalLightCB)가 공유 힙의 앞쪽 두 슬롯을 예약해서 사용
+    // 텍스처는 TextureManager가 이후 인덱스부터 순서대로 할당받음.
+    static const UINT kFrameCBVIndex = 0;
+    static const UINT kLightCBVIndex = 1;
+    static const UINT kReservedDescriptorCount = 2;
+    static const UINT kSharedHeapCapacity = 1024; // Vega 8 iGPU
 
     // --------------------------------------------------
     // 파이프라인 객체
@@ -97,11 +102,8 @@ private:
     Microsoft::WRL::ComPtr<IDXGIAdapter3>               m_iDXGIAdapter3;
     UINT                                                m_rtvDescriptorSize;
 
-    // --------------------------------------------------
-    // 에셋 리소스
-    // --------------------------------------------------
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_vertexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW                            m_vertexBufferView;
+    // CBV/SRV/UAV 공유 디스크립터 힙
+    std::unique_ptr<DescriptorHeapAllocator>            m_sharedDescriptorAllocator;
 
     // --------------------------------------------------
     // 공용 데이터
@@ -109,6 +111,7 @@ private:
     std::unique_ptr<Camera>                             m_Camera;
     std::unique_ptr<DirectionalLight>                   m_DirectionalLight;
     std::unique_ptr<GPUMonitor>                         m_GPUMonitor;
+    std::shared_ptr<TextureManager>                     m_TextureManager;
     std::shared_ptr<ImGuiManager>                       m_ImGuiManager;
 
     Microsoft::WRL::ComPtr<ID3D12Resource>              m_frameCB;

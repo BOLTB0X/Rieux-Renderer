@@ -4,7 +4,9 @@
 #include "Components/Camera.h"
 #include "Components/DirectionalLight.h"
 #include "Components/GPUMonitor.h"
-#include "Components/ImGuiManager.h"
+#include "Components/DescriptorHeapAllocator.h"
+#include "Managers/TextureManager.h"
+#include "Managers/ImGuiManager.h"
 // Util
 #include "SharedConstants.h"
 #include "SharedStructs.h"
@@ -18,11 +20,13 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
-Renderer::Renderer() : m_viewport{}, m_scissorRect{}, m_rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM), m_vertexBufferView{},
-                       m_frameIndex(0), m_rtvDescriptorSize(0), m_fenceValue(0), m_fenceEvent(nullptr) {
+Renderer::Renderer() : m_viewport{}, m_scissorRect{}, m_rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM),
+m_frameIndex(0), m_rtvDescriptorSize(0), m_fenceValue(0), m_fenceEvent(nullptr) {
     m_Camera = std::make_unique<Camera>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
+    m_TextureManager = std::make_shared<TextureManager>();
+    m_sharedDescriptorAllocator = std::make_unique<DescriptorHeapAllocator>();
     m_mappedFrameCB = nullptr;
     m_mappedLightCB = nullptr;
 } // Renderer
@@ -42,7 +46,7 @@ bool Renderer::Init(const InitParams& params) {
     if (!LoadPipeline(params.hwnd, params.width, params.height)) {
         return false;
     }
-    if (!LoadAssets()) {
+    if (!LoadAssets(params.hwnd)) {
         return false;
     }
     if (!LoadGUIs(params.hwnd, params.imGuiManager)) {
@@ -58,7 +62,7 @@ void Renderer::Shutdown() {
     }
 
     WaitForPreviousFrame();
-	ShutdownCommonCBs();
+    ShutdownCommonCBs();
     CloseHandle(m_fenceEvent);
 
     m_fenceEvent = nullptr;
@@ -174,6 +178,12 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     // 커맨드 할당자 생성
     m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator));
 
+    // CBV + 텍스처 SRV가 함께 쓸 공유 디스크립터 힙 (CBV/텍스처 순서로 반드시 먼저 준비)
+    if (!InitSharedDescriptorHeap()) {
+        DebugHelper::DebugPrint("InitSharedDescriptorHeap() failed.");
+        return false;
+    }
+
     if (!InitCommonCBs()) {
         DebugHelper::DebugPrint("InitCommonCBs() failed.");
         return false;
@@ -186,104 +196,96 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     return true;
 } // LoadPipeline
 
-bool Renderer::LoadAssets() {
+bool Renderer::InitSharedDescriptorHeap() {
+    return m_sharedDescriptorAllocator->Init(
+        m_device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSharedHeapCapacity, true);
+} // InitSharedDescriptorHeap
+
+bool Renderer::LoadAssets(HWND hwnd) {
+    // --------------------------------------------------
+    // 루트 시그니처: CBV(FrameCB, LightCB) 테이블 + 텍스처 SRV 테이블
+    // 삼각형 시절의 root CBV 직접 바인딩 방식을 걷어내고,
+    // 공유 디스크립터 힙을 가리키는 테이블 방식으로 전환.
+    // --------------------------------------------------
+    D3D12_DESCRIPTOR_RANGE cbvRange = {};
+    cbvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+    cbvRange.NumDescriptors = kReservedDescriptorCount; // FrameCB(b0), DirectionalLightCB(b1)
+    cbvRange.BaseShaderRegister = 0;
+    cbvRange.RegisterSpace = 0;
+    cbvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    // Sponza 머티리얼 텍스처가 들어갈 자리. 지금은 지오메트리가 없어 실제로 바인딩하진
+    // 않지만, Assimp 연동 시 텍스처 개수만큼 t0..에 순서대로 채워질 예정.
+    D3D12_DESCRIPTOR_RANGE srvRange = {};
+    srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    srvRange.NumDescriptors = kSharedHeapCapacity - kReservedDescriptorCount;
+    srvRange.BaseShaderRegister = 0;
+    srvRange.RegisterSpace = 0;
+    srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
     D3D12_ROOT_PARAMETER rootParameters[2] = {};
 
-    // 매개변수 0: FrameCB (b0)
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[0].Descriptor.ShaderRegister = 0; // b0 레지스터
-    rootParameters[0].Descriptor.RegisterSpace = 0;
+    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[0].DescriptorTable.pDescriptorRanges = &cbvRange;
     rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-    // 매개변수 1: DirectionalLightCB (b1)
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    rootParameters[1].Descriptor.ShaderRegister = 1; // b1 레지스터
-    rootParameters[1].Descriptor.RegisterSpace = 0;
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParameters[1].DescriptorTable.pDescriptorRanges = &srvRange;
+    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+    // Sponza 텍스처 샘플링용 기본 static sampler (linear wrap)
+    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
+    staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
+    staticSampler.ShaderRegister = 0; // s0
+    staticSampler.RegisterSpace = 0;
+    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
     D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-    rootSignatureDesc.NumParameters = _countof(rootParameters); // 2개 파라미터 등록
+    rootSignatureDesc.NumParameters = _countof(rootParameters);
     rootSignatureDesc.pParameters = rootParameters;
+    rootSignatureDesc.NumStaticSamplers = 1;
+    rootSignatureDesc.pStaticSamplers = &staticSampler;
     rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> signature;
     ComPtr<ID3DBlob> error;
-    D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-    m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
-
-    // 셰이더 컴파일
-    ComPtr<IDxcBlob> vertexShader;
-    ComPtr<IDxcBlob> pixelShader;
-    if (!ShaderHelper::InitVertexShader(L"HLSL/HelloTriangleVS.hlsl", &vertexShader) ||
-        !ShaderHelper::InitPixelShader(L"HLSL/HelloTrianglePS.hlsl", &pixelShader)) {
+    HRESULT hr = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+    if (FAILED(hr)) {
+        if (error) {
+            DebugHelper::DebugPrint(std::string("루트 시그니처 직렬화 실패: ") +
+                static_cast<const char*>(error->GetBufferPointer()));
+        }
         return false;
     }
+    m_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
 
-    // 인풋 레이아웃
-    D3D12_INPUT_ELEMENT_DESC inputElementDescs[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
-    // PSO (파이프라인 상태 객체) 생성
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-    psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
-    psoDesc.pRootSignature = m_rootSignature.Get();
-    psoDesc.VS = { vertexShader->GetBufferPointer(), vertexShader->GetBufferSize() };
-    psoDesc.PS = { pixelShader->GetBufferPointer(), pixelShader->GetBufferSize() };
-    psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-    psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-    psoDesc.SampleMask = UINT_MAX;
-    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    psoDesc.NumRenderTargets = 1;
-    psoDesc.RTVFormats[0] = m_rtvFormat;
-    psoDesc.SampleDesc.Count = 1;
-    m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
-
-    // 커맨드 리스트 생성
-    m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList));
+    // 삼각형용 PSO/셰이더/인풋 레이아웃/버텍스 버퍼는 전부 제거.
+    // Sponza 지오메트리 + 셰이더가 준비되면 여기서 PSO를 생성할 예정.
+    // 그 전까지 m_pipelineState는 nullptr로 두고, 커맨드 리스트도 초기 PSO 없이 생성.
+    m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), nullptr, IID_PPV_ARGS(&m_commandList));
     m_commandList->Close(); // 첫 할당 시 닫아두어야 함
-
-    Vertex triangleVertices[] = {
-        { { 0.0f, 0.25f, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-        { { 0.25f, -0.25f, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-        { { -0.25f, -0.25f, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-    };
-    const UINT vertexBufferSize = sizeof(triangleVertices);
-
-    D3D12_HEAP_PROPERTIES heapProps = {};
-    heapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-
-    D3D12_RESOURCE_DESC resDesc = {};
-    resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    resDesc.Width = vertexBufferSize;
-    resDesc.Height = 1;
-    resDesc.DepthOrArraySize = 1;
-    resDesc.MipLevels = 1;
-    resDesc.SampleDesc.Count = 1;
-    resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-
-    m_device->CreateCommittedResource(
-        &heapProps, D3D12_HEAP_FLAG_NONE, &resDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_vertexBuffer));
-
-    // GPU 메모리에 데이터 복사
-    UINT8* pVertexDataBegin;
-    D3D12_RANGE readRange = { 0, 0 };
-    m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin));
-    memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
-    m_vertexBuffer->Unmap(0, nullptr);
-
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.StrideInBytes = sizeof(Vertex);
-    m_vertexBufferView.SizeInBytes = vertexBufferSize;
 
     // 동기화 객체 생성
     m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence));
     m_fenceValue = 1;
     m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
+    TextureManager::InitParams texInit;
+    texInit.device = m_device.Get();
+    texInit.commandQueue = m_commandQueue.Get();
+    texInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    texInit.hwnd = nullptr; // 필요시 실제 hwnd로
+
+    if (!m_TextureManager->Init(texInit)) {
+        DebugHelper::DebugPrint("TextureManager Init 실패");
+        return false;
+    }
     return true;
 } // LoadAssets
 
@@ -291,22 +293,47 @@ bool Renderer::InitCommonCBs() {
     m_Camera->Init(SharedConstants::DEFAULT_FOV,
         (float)SharedConstants::SCREEN_WIDTH / (float)SharedConstants::SCREEN_HEIGHT,
         SharedConstants::SCREEN_NEAR, SharedConstants::SCREEN_DEPTH);
-    m_DirectionalLight->Init(); 
+    m_DirectionalLight->Init();
 
     // 업로드 힙 속성 준비
     CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
 
-    CD3DX12_RESOURCE_DESC frameCBDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(SharedStructs::FrameCB));
+    // CBV는 256바이트 정렬이 필요함
+    const UINT frameCBSize = (sizeof(SharedStructs::FrameCB) + 255) & ~255;
+    const UINT lightCBSize = (sizeof(SharedStructs::DirectionalLightCB) + 255) & ~255;
+
+    CD3DX12_RESOURCE_DESC frameCBDesc = CD3DX12_RESOURCE_DESC::Buffer(frameCBSize);
     m_device->CreateCommittedResource(
         &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &frameCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr, IID_PPV_ARGS(&m_frameCB));
     m_frameCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedFrameCB));
 
-    CD3DX12_RESOURCE_DESC lightCBDesc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(SharedStructs::DirectionalLightCB));
+    CD3DX12_RESOURCE_DESC lightCBDesc = CD3DX12_RESOURCE_DESC::Buffer(lightCBSize);
     m_device->CreateCommittedResource(
         &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &lightCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr, IID_PPV_ARGS(&m_lightCB));
     m_lightCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedLightCB));
+
+    // 공유 힙의 예약된 슬롯(0, 1)에 CBV 등록 - 텍스처보다 반드시 먼저 할당돼 있어야 함
+    UINT frameCBVIndex = m_sharedDescriptorAllocator->Allocate();
+    UINT lightCBVIndex = m_sharedDescriptorAllocator->Allocate();
+    if (frameCBVIndex != kFrameCBVIndex || lightCBVIndex != kLightCBVIndex) {
+        // 이 시점엔 힙에서 아무것도 할당된 적이 없어야 하므로 항상 0, 1이 나와야 정상.
+        // 여기 걸리면 InitCommonCBs()가 InitSharedDescriptorHeap()보다 먼저 불렸거나
+        // 다른 곳에서 이미 이 힙을 Allocate()한 것 
+        DebugHelper::DebugPrint("공용 CBV가 예약된 인덱스(0,1)에 할당되지 않음 - 힙 할당 순서 확인 필요");
+        return false;
+    }
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC frameCbvDesc = {};
+    frameCbvDesc.BufferLocation = m_frameCB->GetGPUVirtualAddress();
+    frameCbvDesc.SizeInBytes = frameCBSize;
+    m_device->CreateConstantBufferView(&frameCbvDesc, m_sharedDescriptorAllocator->GetCPUHandle(kFrameCBVIndex));
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC lightCbvDesc = {};
+    lightCbvDesc.BufferLocation = m_lightCB->GetGPUVirtualAddress();
+    lightCbvDesc.SizeInBytes = lightCBSize;
+    m_device->CreateConstantBufferView(&lightCbvDesc, m_sharedDescriptorAllocator->GetCPUHandle(kLightCBVIndex));
 
     return true;
 } // InitCommonCBs
@@ -351,12 +378,18 @@ void Renderer::ShutdownCommonCBs() {
 
 void Renderer::PopulateCommandList() {
     m_commandAllocator->Reset();
-    m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get());
+    m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()); // PSO 없으면 nullptr로 리셋됨
 
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
 
-    m_commandList->SetGraphicsRootConstantBufferView(0, m_frameCB->GetGPUVirtualAddress()); // b0
-    m_commandList->SetGraphicsRootConstantBufferView(1, m_lightCB->GetGPUVirtualAddress()); // b1
+    // CBV/텍스처가 함께 들어있는 공유 힙을 바인딩 (프레임당 한 번)
+    ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
+    m_commandList->SetDescriptorHeaps(_countof(heaps), heaps);
+
+    // 테이블 0: CBV (FrameCB, LightCB) - 힙의 0번 인덱스부터 시작하는 테이블
+    m_commandList->SetGraphicsRootDescriptorTable(0, m_sharedDescriptorAllocator->GetGPUHandle(kFrameCBVIndex));
+    // 테이블 1: 텍스처 SRV - Sponza 머티리얼이 들어오기 전까진 실질적으로 사용되지 않음
+    m_commandList->SetGraphicsRootDescriptorTable(1, m_sharedDescriptorAllocator->GetGPUHandle(kReservedDescriptorCount));
 
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
@@ -374,16 +407,14 @@ void Renderer::PopulateCommandList() {
     rtvHandle.ptr += m_frameIndex * m_rtvDescriptorSize;
     m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
-    // 배경색 지우기
+    // 배경색 지우기 - Sponza 지오메트리가 들어오기 전까진 이 화면이 전부임
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
     m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
-    m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
 
-    // 드로 콜!
-    m_commandList->DrawInstanced(3, 1, 0, 0);
+    // TODO(Sponza): 여기에 메시별 IASetVertexBuffers/IASetIndexBuffer + DrawIndexedInstanced 추가 예정
 
     m_ImGuiManager->RenderDrawData(m_commandList.Get());
+
     // 베리어: 렌더 타겟 상태 -> 프리젠트 상태로 복구
     D3D12_RESOURCE_BARRIER barrierPresent = {};
     barrierPresent.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -406,7 +437,6 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     if (!m_ImGuiManager->Init(guiParams)) {
         return false;
     }
-
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Performance GUI",
