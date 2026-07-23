@@ -6,10 +6,10 @@
 #include "Data/Texture.h"
 // Utils
 #include "DebugHelper.h"
-#include "SharedConstants.h"
+#include "SharedCommons.h"
 
 using namespace DebugHelper;
-using namespace SharedConstants;
+using namespace SharedCommons;
 
 TextureManager::TextureManager()
     : m_device(nullptr), m_uploadFenceEvent(nullptr), m_uploadFenceValue(0), m_descriptorAllocator(nullptr) {

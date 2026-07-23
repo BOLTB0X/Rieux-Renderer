@@ -1,8 +1,8 @@
 #pragma once
 #include <directxmath.h>
-#include "SharedConstants.h"
+#include "SharedCommons.h"
 
-namespace SharedStructs {
+namespace SharedCBs {
 
     __declspec(align(256)) struct MatrixCB {
         DirectX::XMMATRIX world;
@@ -41,7 +41,7 @@ namespace SharedStructs {
             viewInv(DirectX::XMMatrixIdentity()),
             projInv(DirectX::XMMatrixIdentity()),
             cameraPosition(0.0f, 0.0f, 0.0f), cameraFov(0.0f),
-            screenResolution((float)SharedConstants::SCREEN_WIDTH, (float)SharedConstants::SCREEN_HEIGHT),
+            screenResolution((float)SharedCommons::SCREEN_WIDTH, (float)SharedCommons::SCREEN_HEIGHT),
             time(0.0f), padding(0.0f) {
         }
     }; // FrameCB
@@ -79,4 +79,4 @@ namespace SharedStructs {
             padding3(0.0f, 0.0f, 0.0f, 0.0f) {
         }
     }; // DirectionalLightCB
-} // SharedStructs
+} // SharedCBs

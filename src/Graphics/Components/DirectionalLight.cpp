@@ -1,10 +1,10 @@
 #include "Pch.h"
 #include "DirectionalLight.h"
 // Util
-#include "SharedConstants.h"
+#include "SharedCommons.h"
 #include "imgui.h"
 
-using namespace SharedConstants;
+using namespace SharedCommons;
 using namespace DirectX;
 
 DirectionalLight::DirectionalLight()

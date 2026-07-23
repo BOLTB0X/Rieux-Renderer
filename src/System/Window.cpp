@@ -3,9 +3,9 @@
 // Core
 #include "RendererState.h"
 // Utils
-#include "SharedConstants.h"
+#include "SharedCommons.h"
 
-using namespace SharedConstants;
+using namespace SharedCommons;
 
 Window::Window()
     : m_hwnd(nullptr),
@@ -38,14 +38,14 @@ bool Window::Init(WNDPROC wndProc, LPCWSTR appName) {
     if (!RegisterClassExW(&wc)) return false;
 
     int posX, posY;
-    int windowWidth = SharedConstants::SCREEN_WIDTH;
-    int windowHeight = SharedConstants::SCREEN_HEIGHT;
+    int windowWidth = SharedCommons::SCREEN_WIDTH;
+    int windowHeight = SharedCommons::SCREEN_HEIGHT;
 
-    if (SharedConstants::FULL_SCREEN) {
+    if (SharedCommons::FULL_SCREEN) {
         posX = posY = 0;
     }
     else {
-        RECT windowRect = { 0, 0, (LONG)SharedConstants::SCREEN_WIDTH, (LONG)SharedConstants::SCREEN_HEIGHT };
+        RECT windowRect = { 0, 0, (LONG)SharedCommons::SCREEN_WIDTH, (LONG)SharedCommons::SCREEN_HEIGHT };
         AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
 
         windowWidth = windowRect.right - windowRect.left;
@@ -80,7 +80,7 @@ bool Window::Init(WNDPROC wndProc, LPCWSTR appName) {
 void Window::Shutdown() {
     ShowCursor(true);
 
-    if (SharedConstants::FULL_SCREEN) {
+    if (SharedCommons::FULL_SCREEN) {
         ChangeDisplaySettings(NULL, 0);
     }
 

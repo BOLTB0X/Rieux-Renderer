@@ -4,8 +4,6 @@
 #include <vector>
 #include <mutex>
 
-// CBV/SRV/UAV(또는 다른 타입) 디스크립터 힙 하나를 감싸서
-// "인덱스"만으로 CPU/GPU 핸들을 얻을 수 있게 해주는 얇은 할당자.
 class DescriptorHeapAllocator {
 public:
     DescriptorHeapAllocator();

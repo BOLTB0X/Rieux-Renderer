@@ -8,13 +8,20 @@
 #include <DirectXMath.h>
 #include <string>
 #include <memory>
+#include "RendererState.h"
+#include "D3D12/RenderTarget.h"
 
+class RenderQueue;
 class Camera;
 class DirectionalLight;
 class GPUMonitor;
 class TextureManager;
 class DescriptorHeapAllocator;
 class ImGuiManager;
+class D3D12Device;
+class CommandQueue;
+class D3D12SwapChain;
+class RenderTextureManager;
 
 class Renderer {
 public:
@@ -65,69 +72,48 @@ private:
     bool LoadGUIs(HWND, std::shared_ptr<ImGuiManager>);
 
     bool InitSharedDescriptorHeap();
+    bool InitSceneRenderTarget(int width, int height);
     bool InitCommonCBs();
     void UpdateCommonCBs();
     void ShutdownCommonCBs();
 
     void PopulateCommandList();
-    void WaitForPreviousFrame();
 
     void OnGUI();
 
 private:
-    static const UINT FrameCount = 2;
-
-    // CBV(FrameCB, DirectionalLightCB)가 공유 힙의 앞쪽 두 슬롯을 예약해서 사용
-    // 텍스처는 TextureManager가 이후 인덱스부터 순서대로 할당받음.
-    static const UINT kFrameCBVIndex = 0;
-    static const UINT kLightCBVIndex = 1;
-    static const UINT kReservedDescriptorCount = 2;
-    static const UINT kSharedHeapCapacity = 1024; // Vega 8 iGPU
-
     // --------------------------------------------------
     // 파이프라인 객체
     // --------------------------------------------------
-    D3D12_VIEWPORT                                      m_viewport;
-    D3D12_RECT                                          m_scissorRect;
-    DXGI_FORMAT                                         m_rtvFormat;
-    Microsoft::WRL::ComPtr<IDXGISwapChain3>             m_swapChain;
-    Microsoft::WRL::ComPtr<ID3D12Device>                m_device;
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_renderTargets[FrameCount];
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator>      m_commandAllocator;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue>          m_commandQueue;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature>         m_rootSignature;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState>         m_pipelineState;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>   m_commandList;
-    Microsoft::WRL::ComPtr<IDXGIAdapter3>               m_iDXGIAdapter3;
-    UINT                                                m_rtvDescriptorSize;
+    std::unique_ptr<D3D12Device>          m_D3D12Device;
+    std::unique_ptr<CommandQueue>         m_CommandQueue; // 메인 다이렉트 큐
+    std::unique_ptr<D3D12SwapChain>       m_SwapChain;    // 백버퍼 + Present 전용
+    D3D12_VIEWPORT                        m_viewport;
+    D3D12_RECT                            m_scissorRect;
+    DXGI_FORMAT                           m_rtvFormat;
 
-    // CBV/SRV/UAV 공유 디스크립터 힙
-    std::unique_ptr<DescriptorHeapAllocator>            m_sharedDescriptorAllocator;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+
+    std::unique_ptr<DescriptorHeapAllocator>    m_sharedDescriptorAllocator;
+    std::unique_ptr<RenderTextureManager>       m_RenderTextureManager;
+    RenderTarget                                m_SceneRenderTarget;
 
     // --------------------------------------------------
     // 공용 데이터
     // --------------------------------------------------
-    std::unique_ptr<Camera>                             m_Camera;
-    std::unique_ptr<DirectionalLight>                   m_DirectionalLight;
-    std::unique_ptr<GPUMonitor>                         m_GPUMonitor;
-    std::shared_ptr<TextureManager>                     m_TextureManager;
-    std::shared_ptr<ImGuiManager>                       m_ImGuiManager;
+    std::unique_ptr<RenderQueue>           m_RenderQueue;
+    std::unique_ptr<Camera>                m_Camera;
+    std::unique_ptr<DirectionalLight>      m_DirectionalLight;
+    std::unique_ptr<GPUMonitor>            m_GPUMonitor;
+    std::shared_ptr<TextureManager>        m_TextureManager;
+    std::shared_ptr<ImGuiManager>          m_ImGuiManager;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_frameCB;
-    Microsoft::WRL::ComPtr<ID3D12Resource>              m_lightCB;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_frameCB;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_lightCB;
 
-    // Persistent Mapping을 위한 포인터
-    UINT8*                                              m_mappedFrameCB;
-    UINT8*                                              m_mappedLightCB;
+    UINT8* m_mappedFrameCB;
+    UINT8* m_mappedLightCB;
 
-    // --------------------------------------------------
-    // 동기화 객체
-    // --------------------------------------------------
-    UINT                                                m_frameIndex;
-    HANDLE                                              m_fenceEvent;
-    Microsoft::WRL::ComPtr<ID3D12Fence>                 m_fence;
-    UINT64                                              m_fenceValue;
-
-    FrameParams                                         m_currentFrameParams;
+    FrameParams                            m_currentFrameParams;
 }; // Renderer

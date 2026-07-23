@@ -2,22 +2,22 @@
 #include "Camera.h"
 #include "Frustum.h"
 // Utils
-#include "SharedConstants.h"
+#include "SharedCommons.h"
 #include "MathHelper.h"
 
 using namespace DirectX;
-using namespace SharedConstants;
+using namespace SharedCommons;
 
 Camera::Camera()
-    : m_position(SharedConstants::DEFAULT_POSITION),
-    m_rotation(SharedConstants::DEFAULT_ROTATION),
+    : m_position(SharedCommons::DEFAULT_POSITION),
+    m_rotation(SharedCommons::DEFAULT_ROTATION),
     m_up(0.0f, 0.0f, 0.0f),
     m_fov(0.0f), m_near(0.0f), m_far(0.0f), m_aspect(0.0f) {
     m_frustum = std::make_unique<Frustum>();
-    m_maxPitch = SharedConstants::MAX_PITCH;
-    m_minPitch = SharedConstants::MIN_PITCH;
-    m_maxFov = SharedConstants::MAX_FOV;
-    m_minFov = SharedConstants::MIN_FOV;
+    m_maxPitch = SharedCommons::MAX_PITCH;
+    m_minPitch = SharedCommons::MIN_PITCH;
+    m_maxFov = SharedCommons::MAX_FOV;
+    m_minFov = SharedCommons::MIN_FOV;
     m_viewMatrix = XMMatrixIdentity();
     m_projectionMatrix = XMMatrixIdentity();
     m_forward = MathHelper::FRONT;
@@ -154,9 +154,9 @@ void Camera::AddFOV(float fovDelta) {
 } // AddFOV
 
 void Camera::Reset() {
-    m_position = SharedConstants::DEFAULT_POSITION;
-    m_rotation = SharedConstants::DEFAULT_ROTATION;
-    m_fov = SharedConstants::DEFAULT_FOV;
+    m_position = SharedCommons::DEFAULT_POSITION;
+    m_rotation = SharedCommons::DEFAULT_ROTATION;
+    m_fov = SharedCommons::DEFAULT_FOV;
     UpdateProjection();
 } // Reset
 

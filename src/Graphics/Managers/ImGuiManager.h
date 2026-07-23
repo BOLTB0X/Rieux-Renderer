@@ -23,6 +23,7 @@ public:
 public:
     ImGuiManager();
     ImGuiManager(const ImGuiManager&) = delete;
+    ImGuiManager& operator=(const ImGuiManager&) = delete;
     ~ImGuiManager();
 
     bool Init(const InitParams&);

@@ -37,6 +37,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Components"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Managers"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Resources"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/World"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/D3D12"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utils"
 )
 
