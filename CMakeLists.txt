@@ -32,13 +32,14 @@ find_package(assimp CONFIG REQUIRED)
 target_include_directories(${PROJECT_NAME} PRIVATE 
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Core/D3D12"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Core/Managers"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/System"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Components"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Managers"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Resources"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Data"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Tool"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/World"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/D3D12"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utils"
 )
 
