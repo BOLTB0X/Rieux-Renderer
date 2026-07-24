@@ -15,7 +15,7 @@ public:
     void Frame(float, float, float, float, float, float);
     void Update();
     void BuildFrustum();
-    void OnGui(); // ImGui 용
+    void OnGUI();
 
 public:
     // 조작 함수
@@ -69,4 +69,7 @@ private:
     float                    m_fov, m_near, m_far, m_aspect;
     float                    m_maxPitch, m_minPitch;
     float                    m_maxFov, m_minFov;
+    float                    m_rotationSpeed;
+    float                    m_moveSpeed;
+    float                    m_zoomSpeed;
 }; // Camera

@@ -96,7 +96,7 @@ XMFLOAT2 DirectionalLight::GetUV(const XMMATRIX& view, const XMMATRIX& proj) con
     );
 } // GetUV
 
-void DirectionalLight::OnGui() {
+void DirectionalLight::OnGUI() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));

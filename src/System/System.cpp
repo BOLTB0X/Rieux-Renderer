@@ -82,8 +82,6 @@ bool System::Init() {
 
     Renderer::InitParams rendererParams;
     rendererParams.hwnd = m_Window->GetHwnd();
-    rendererParams.width = RendererState::ScreenWidth;
-    rendererParams.height = RendererState::ScreenHeight;
     rendererParams.imGuiManager = m_ImGuiManager;
     if (!m_Renderer->Init(rendererParams)) {
         spdlog::error("Renderer Init Failed!");
@@ -140,10 +138,6 @@ void System::Run() {
 } // Run
 
 bool System::Frame() {
-    if (!m_Input->Frame()) {
-        return false;
-    }
-
     if (m_Input->IsF1Toggled()) {
         m_ImGuiManager->ToggleWidget();
 
@@ -196,6 +190,10 @@ bool System::Frame() {
     }
     if (m_Input->IsXPressed()) {
         frameParams.moveUp -= speed;
+    }
+
+    if (!m_Input->Frame()) {
+        return false;
     }
 
     return m_Renderer->Frame(frameParams);

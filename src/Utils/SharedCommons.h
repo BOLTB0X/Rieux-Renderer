@@ -54,10 +54,13 @@ namespace SharedCommons {
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
     static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";
+    static const std::string  STATIC_SPONZA_VS_STR = "StaticSponzaVS";
+    static const std::string  STATIC_SPONZA_PS_STR = "StaticSponzaPS";
+    static const std::string  STATIC_SPONZA= "StaticSponza";
 } // HLSL
 
 namespace SharedCommons {
-    static const std::string SPONZA = "assets/Sponza/sponza.obj";
+    static const std::string SPONZA_PATH = "assets/Sponza/sponza.obj";
 } // Path
 
 namespace SharedCommons {

@@ -4,11 +4,13 @@
 #include "Managers/TextureManager.h"
 // Utils
 #include "DebugHelper.h"
+#include "SharedCommons.h"
 // STL
 #include <filesystem>
 
 using namespace DebugHelper;
 using namespace DirectX;
+using namespace Microsoft::WRL;
 
 AssimpLoader::AssimpLoader(std::shared_ptr<TextureManager> texMgr)
     : m_TextureManager(texMgr), m_device(nullptr), m_uploadFenceEvent(nullptr), m_uploadFenceValue(0) {
@@ -170,8 +172,8 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
     meshParams.indices = &indices;
     meshParams.materialIndex = mesh->mMaterialIndex;
 
-    Microsoft::WRL::ComPtr<ID3D12Resource> vbUpload;
-    Microsoft::WRL::ComPtr<ID3D12Resource> ibUpload;
+    ComPtr<ID3D12Resource> vbUpload;
+    ComPtr<ID3D12Resource> ibUpload;
 
     if (!pbrMesh->Init(meshParams, vbUpload, ibUpload)) {
         DebugPrint("PBRMesh 생성 실패: " + std::string(mesh->mName.C_Str()));
@@ -198,7 +200,8 @@ void AssimpLoader::ProcessMaterials(const aiScene* scene, const std::string& dir
 
         // Albedo (MTL: map_Kd)
         material.albedo = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE, PBRTextureType::Albedo);
-        aiColor4D baseColor((SharedCommons::ALBEDO_FACTOR, 1.0f));
+        aiColor4D baseColor(SharedCommons::ALBEDO_FACTOR.x, SharedCommons::ALBEDO_FACTOR.y,
+            SharedCommons::ALBEDO_FACTOR.z, SharedCommons::ALBEDO_FACTOR.w);
         aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor);
         material.albedoFactor = { baseColor.r, baseColor.g, baseColor.b, baseColor.a };
 

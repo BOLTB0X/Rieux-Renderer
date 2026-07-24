@@ -36,7 +36,7 @@ bool PBRMesh::Init(const InitParams& params,
     CD3DX12_RESOURCE_DESC vbDesc = CD3DX12_RESOURCE_DESC::Buffer(vbSize);
     if (FAILED(params.device->CreateCommittedResource(
         &defaultHeapProps, D3D12_HEAP_FLAG_NONE, &vbDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_vertexBuffer)))) {
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_vertexBuffer)))) {
         DebugPrint("버텍스 버퍼 생성 실패");
         return false;
     }
@@ -69,7 +69,7 @@ bool PBRMesh::Init(const InitParams& params,
     CD3DX12_RESOURCE_DESC ibDesc = CD3DX12_RESOURCE_DESC::Buffer(ibSize);
     if (FAILED(params.device->CreateCommittedResource(
         &defaultHeapProps, D3D12_HEAP_FLAG_NONE, &ibDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_indexBuffer)))) {
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_indexBuffer)))) {
         DebugPrint("인덱스 버퍼 생성 실패");
         return false;
     }

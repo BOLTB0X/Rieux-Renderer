@@ -23,6 +23,9 @@ Camera::Camera()
     m_forward = MathHelper::FRONT;
     m_right = DirectX::XMVector3Cross(m_forward, MathHelper::UP);
     m_upVector = DirectX::XMVector3Cross(m_right, m_forward);
+    m_rotationSpeed = 1.0f;
+    m_moveSpeed = 1.0;
+    m_zoomSpeed = 1.0;
 } //Camera
 
 Camera::~Camera() {
@@ -48,25 +51,25 @@ void Camera::UpdateProjection() {
 
 void Camera::Frame(float moveForward, float moveRight, float moveUp, float rotationDeltaX, float rotationDeltaY, float zoomDelta) {
     if (rotationDeltaX != 0.0f) {
-        AddYaw(rotationDeltaX);
+        AddYaw(rotationDeltaX * m_rotationSpeed);
     }
     if (rotationDeltaY != 0.0f) {
-        AddPitch(rotationDeltaY);
+        AddPitch(rotationDeltaY * m_rotationSpeed);
     }
 
     if (moveForward != 0.0f) {
-        MoveForwardBack(moveForward);
+        MoveForwardBack(moveForward * m_moveSpeed);
     }
     if (moveRight != 0.0f) {
-        MoveLeftRight(moveRight);
+        MoveLeftRight(moveRight * m_moveSpeed);
     }
     if (moveUp != 0.0f) {
-        MoveUpDown(moveUp);
+        MoveUpDown(moveUp * m_moveSpeed);
     }
 
     if (zoomDelta != 0.0f) {
         float fovDelta = -zoomDelta * 0.05f;
-        AddFOV(fovDelta);
+        AddFOV(fovDelta * m_zoomSpeed);
     }
 } // Frame
 
@@ -97,7 +100,7 @@ void Camera::BuildFrustum() {
     }
 } // BuildFrustum
 
-void Camera::OnGui() {
+void Camera::OnGUI() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
@@ -128,6 +131,13 @@ void Camera::OnGui() {
     float nearP = GetNear();
     float farP = GetFar();
     ImGui::Text("Near: %.2f / Far: %.2f", nearP, farP);
+
+    ImGui::Separator();
+    ImGui::Text("Camera Speeds");
+
+    ImGui::DragFloat("Move Speed", &m_moveSpeed, 0.1f, 0.01f, 100.0f, "%.2f");
+    ImGui::DragFloat("Rotation Speed", &m_rotationSpeed, 0.001f, 0.001f, 5.0f, "%.3f");
+    ImGui::DragFloat("Zoom Speed", &m_zoomSpeed, 0.1f, 0.01f, 50.0f, "%.2f");
 
     Update();
 } // onGui

@@ -1,5 +1,7 @@
 #include "Pch.h"
 #include "D3D12SwapChain.h"
+// Core
+#include "RendererState.h"
 // Utils
 #include "DebugHelper.h"
 
@@ -7,7 +9,8 @@ using namespace Microsoft::WRL;
 using namespace DebugHelper;
 
 D3D12SwapChain::D3D12SwapChain()
-    : m_rtvDescriptorSize(0), m_frameIndex(0), m_frameCount(0) {
+    : m_viewport{}, m_scissorRect{},
+      m_rtvDescriptorSize(0), m_frameIndex(0), m_frameCount(0) {
 } // D3D12SwapChain
 
 D3D12SwapChain::~D3D12SwapChain() {
@@ -20,6 +23,9 @@ bool D3D12SwapChain::Init(const InitParams& params) {
     }
 
     m_frameCount = params.frameCount;
+
+    m_viewport = { 0.0f, 0.0f, static_cast<float>(RendererState::ScreenWidth), static_cast<float>(RendererState::ScreenHeight), 0.0f, 1.0f };
+    m_scissorRect = { 0, 0,  RendererState::ScreenWidth, RendererState::ScreenHeight };
 
     ComPtr<IDXGIFactory4> factory;
     if (FAILED(CreateDXGIFactory2(0, IID_PPV_ARGS(&factory)))) {
@@ -79,6 +85,14 @@ void D3D12SwapChain::Present(bool vsync) {
     m_swapChain->Present(vsync ? 1 : 0, 0);
     m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 } // Present
+
+const D3D12_VIEWPORT& D3D12SwapChain::GetViewport() const {
+    return m_viewport;
+} // GetViewport
+
+const D3D12_RECT& D3D12SwapChain::GetScissorRect() const {
+    return m_scissorRect;
+} // GetScissorRect
 
 ID3D12Resource* D3D12SwapChain::GetCurrentBackBuffer() const {
     return m_backBuffers[m_frameIndex].Get();

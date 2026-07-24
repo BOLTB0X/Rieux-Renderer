@@ -4,7 +4,6 @@
 #include <dxgi1_6.h>
 #include <vector>
 
-// 스왑체인 + 백버퍼 RTV만 담당.
 class D3D12SwapChain {
 public:
     struct InitParams {
@@ -28,6 +27,8 @@ public:
     void Present(bool);
 
 public:
+    const D3D12_VIEWPORT&       GetViewport() const;
+    const D3D12_RECT&           GetScissorRect() const;
     ID3D12Resource*             GetCurrentBackBuffer() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentRTVHandle() const;
     UINT                        GetCurrentFrameIndex() const;
@@ -37,6 +38,8 @@ private:
     std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> m_backBuffers;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE>            m_rtvHandles;
+    D3D12_VIEWPORT                                      m_viewport;
+    D3D12_RECT                                          m_scissorRect;
     UINT                                                m_rtvDescriptorSize;
     UINT                                                m_frameIndex;
     UINT                                                m_frameCount;

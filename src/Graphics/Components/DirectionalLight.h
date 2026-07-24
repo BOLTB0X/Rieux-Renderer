@@ -11,7 +11,7 @@ public:
 
     void Init();
     void Update();
-    void OnGui();
+    void OnGUI();
 
     // Setter
     void              SetLookAt(DirectX::XMFLOAT3);

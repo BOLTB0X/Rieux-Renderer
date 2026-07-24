@@ -1,4 +1,8 @@
 #pragma once
+#include <wrl.h>
+#include <d3d12.h>
+#include <dxgi1_6.h>
+#include <dxcapi.h>
 
 class RendererState {
 public: // Screen
@@ -12,8 +16,19 @@ public: // Screen
 
 public: // 프레임 및 디스크립터
     static UINT FrameCount;
-    static UINT KFrameCBVIndex;
-    static UINT KLightCBVIndex;
-    static UINT KReservedDescriptorCount;
-    static UINT KSharedHeapCapacity;
+    static UINT CBV_Table;
+    static UINT FrameCBV;
+    static UINT LightCBV;
+    static UINT WorldIndex;
+    static UINT Tex0Index;
+    static UINT Tex1Index;
+    static UINT Tex2Index;
+    static UINT ReservedDescriptorCount;
+    static UINT SharedHeapCapacity;
+    static UINT RTVCapacity;
+    static UINT DSVCapacity;;
+
+
+public:
+    static DXGI_FORMAT RTVFormat;
 }; // RendererState

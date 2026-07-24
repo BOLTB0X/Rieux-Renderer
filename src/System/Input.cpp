@@ -20,17 +20,18 @@ Input::~Input() {
 } // ~Input
 
 bool Input::Init(HINSTANCE hinstance, HWND hwnd) {
+    m_hwnd = hwnd;
+
     RECT rect;
     GetClientRect(hwnd, &rect);
     POINT pt = { (rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2 };
-
     ClientToScreen(hwnd, &pt);
 
     m_windowCenterX = pt.x;
     m_windowCenterY = pt.y;
 
-    ShowCursor(FALSE);
-    m_cursorHidden = true;
+    m_cursorHidden = false;
+    ShowCursor(TRUE);
 
     return true;
 } // Init
@@ -45,12 +46,12 @@ bool Input::Frame() {
     ProcessInput();
 
     m_prevMouseL = IsMouseLPressed();
-    m_mouseWheelDelta = 0;
 
     if (IsEscapePressed()) {
         return false;
     }
 
+    m_mouseWheelDelta = 0;
     return true;
 } // Frame
 

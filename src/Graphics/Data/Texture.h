@@ -17,7 +17,7 @@ public:
         DescriptorHeapAllocator*, const std::string&,
         Microsoft::WRL::ComPtr<ID3D12Resource>&, bool keepCpuPixels = false);
 
-    UINT                      GetSRVIndex() const; // Dynamic Indexing 단계에서 셰이더로 넘길 값
+    UINT                      GetSRVIndex() const;
     ID3D12Resource*           GetResource() const;
     float                     GetPixelHeight(int, int) const;
     int                       GetWidth() const;

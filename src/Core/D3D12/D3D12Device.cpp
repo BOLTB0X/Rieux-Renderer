@@ -44,5 +44,5 @@ bool D3D12Device::Init() {
     return true;
 } // Init
 
-ID3D12Device* D3D12Device::GetDevice() const { return m_device.Get(); }
+ID3D12Device*  D3D12Device::GetDevice() const { return m_device.Get(); }
 IDXGIAdapter3* D3D12Device::GetAdapter() const { return m_iDXGIAdapter3.Get(); }

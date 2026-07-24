@@ -1,19 +1,24 @@
 #include "Pch.h"
 #include "Renderer.h"
 // D3D12
-#include "D3D12/D3D12Device.h"
-#include "D3D12/CommandQueue.h"
-#include "D3D12/D3D12SwapChain.h"
+#include "D3D12Device.h"
+#include "CommandQueue.h"
+#include "D3D12SwapChain.h"
+#include "D3D12RootSignature.h"
+#include "D3D12PipelineState.h"
+// Managers
+#include "RenderTextureManager.h"
+#include "TextureManager.h"
+#include "PSOManager.h"
+#include "ImGuiManager.h"
 // Components
 #include "DescriptorHeapAllocator.h"
 #include "RenderQueue.h"
 #include "Camera.h"
 #include "DirectionalLight.h"
 #include "GPUMonitor.h"
-// Managers
-#include "RenderTextureManager.h"
-#include "ImGuiManager.h"
-#include "TextureManager.h"
+// World
+#include "World/StaticSponza.h"
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
@@ -25,8 +30,11 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 Renderer::Renderer()
-    : m_viewport{}, m_scissorRect{}, m_rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM),
-    m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{} {
+    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{} {
+    m_D3D12Device = std::make_unique<D3D12Device>();
+    m_CommandQueue = std::make_unique<CommandQueue>();
+    m_SwapChain = std::make_unique<D3D12SwapChain>();
+    m_RootSignature = std::make_unique<D3D12RootSignature>();
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
@@ -36,11 +44,9 @@ Renderer::Renderer()
     m_TextureManager = std::make_shared<TextureManager>();
     m_sharedDescriptorAllocator = std::make_unique<DescriptorHeapAllocator>();
 
-    // 신규 캡슐화 개체 할당
-    m_D3D12Device = std::make_unique<D3D12Device>();
-    m_CommandQueue = std::make_unique<CommandQueue>();
-    m_SwapChain = std::make_unique<D3D12SwapChain>();
     m_RenderTextureManager = std::make_unique<RenderTextureManager>();
+    m_PSOManager = std::make_shared<PSOManager>();
+    m_Sponza = std::make_unique<StaticSponza>();
 } // Renderer
 
 Renderer::~Renderer() {
@@ -52,25 +58,18 @@ bool Renderer::Init(const InitParams& params) {
         return false;
     }
 
-    m_viewport = { 0.0f, 0.0f, static_cast<float>(params.width), static_cast<float>(params.height), 0.0f, 1.0f };
-    m_scissorRect = { 0, 0, params.width, params.height };
-
-    // 1. 핵심 D3D12 파이프라인 컴포넌트 로드
-    if (!LoadPipeline(params.hwnd, params.width, params.height)) {
+    if (!LoadPipeline(params.hwnd, RendererState::ScreenWidth, RendererState::ScreenHeight)) {
         return false;
     }
 
-    // 2. 오프스크린 렌더 타겟 및 텍스처 매니저 초기화
-    if (!InitSceneRenderTarget(params.width, params.height)) {
+    if (!LoadSceneRenderTarget(RendererState::ScreenWidth, RendererState::ScreenHeight)) {
         return false;
     }
 
-    // 3. 에셋 및 셰이더 리소스 로드
     if (!LoadAssets(params.hwnd)) {
         return false;
     }
 
-    // 4. GUI 시스템 초기화
     if (!LoadGUIs(params.hwnd, params.imGuiManager)) {
         return false;
     }
@@ -80,7 +79,7 @@ bool Renderer::Init(const InitParams& params) {
 
 void Renderer::Shutdown() {
     if (m_CommandQueue) {
-        m_CommandQueue->Shutdown(); // 내부에서 GPU 동기화 처리 후 Fence 핸들 해제
+        m_CommandQueue->Shutdown();
     }
 
     ShutdownCommonCBs();
@@ -106,7 +105,7 @@ bool Renderer::Render() {
     // 커맨드 리스트 실행 위임
     m_CommandQueue->Execute();
 
-    // 후면 버퍼를 전면 버퍼로 교체 (VSync 활성화 파라미터 전달)
+    // 후면 버퍼를 전면 버퍼로 교체
     m_SwapChain->Present(true);
 
     // 다음 프레임을 위해 동기화 수행
@@ -135,7 +134,7 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     swapChainParams.commandQueue = m_CommandQueue->GetQueue();
     swapChainParams.width = width;
     swapChainParams.height = height;
-    swapChainParams.frameCount = 2; // 기본 더블 버퍼링 세팅
+    swapChainParams.frameCount = RendererState::FrameCount;
 
     if (!m_SwapChain->Init(swapChainParams)) {
         DebugHelper::DebugPrint("D3D12SwapChain 초기화 실패");
@@ -143,7 +142,9 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     }
 
     // 공유 디스크립터 힙 초기화
-    if (!InitSharedDescriptorHeap()) {
+    if (!m_sharedDescriptorAllocator->Init(m_D3D12Device->GetDevice(),
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+        RendererState::SharedHeapCapacity, true)) {
         DebugHelper::DebugPrint("InitSharedDescriptorHeap() 실패");
         return false;
     }
@@ -167,92 +168,54 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     return true;
 } // LoadPipeline
 
-bool Renderer::InitSharedDescriptorHeap() {
-    return m_sharedDescriptorAllocator->Init(
-        m_D3D12Device->GetDevice(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, RendererState::KSharedHeapCapacity, true);
-} // InitSharedDescriptorHeap
-
-bool Renderer::InitSceneRenderTarget(int width, int height) {
-    // 1. 오프스크린 렌더 텍스처 매니저 초기화
+bool Renderer::LoadSceneRenderTarget(int width, int height) {
+    // 오프스크린 렌더 텍스처 매니저 초기화
     RenderTextureManager::InitParams rtmParams;
     rtmParams.device = m_D3D12Device->GetDevice();
     rtmParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
-    rtmParams.rtvCapacity = 64;
-    rtmParams.dsvCapacity = 16;
+    rtmParams.rtvCapacity = RendererState::RTVCapacity;
+    rtmParams.dsvCapacity = RendererState::DSVCapacity;
 
     if (!m_RenderTextureManager->Init(rtmParams)) {
         return false;
     }
 
-    // 2. 실제 메인 씬이 그려질 오프스크린 컬러 + 뎁스 버퍼 지정
+    // 실제 메인 씬이 그려질 오프스크린 컬러 + 뎁스 버퍼 지정
     RenderTarget::InitParams rtParams;
     rtParams.device = m_D3D12Device->GetDevice();
     rtParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
     rtParams.width = width;
     rtParams.height = height;
-    rtParams.colorFormat = m_rtvFormat;
+    rtParams.colorFormat = RendererState::RTVFormat;
     rtParams.depthFormat = DXGI_FORMAT_D32_FLOAT;
 
-    return m_SceneRenderTarget.Init(rtParams);
-} // InitSceneRenderTarget
-
-bool Renderer::LoadAssets(HWND hwnd) {
-    // --------------------------------------------------
-    // 루트 시그니처 조립
-    // --------------------------------------------------
-    D3D12_DESCRIPTOR_RANGE cbvRange = {};
-    cbvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-    cbvRange.NumDescriptors = RendererState::KReservedDescriptorCount;
-    cbvRange.BaseShaderRegister = 0;
-    cbvRange.RegisterSpace = 0;
-    cbvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_DESCRIPTOR_RANGE srvRange = {};
-    srvRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    srvRange.NumDescriptors = RendererState::KSharedHeapCapacity - RendererState::KReservedDescriptorCount;
-    srvRange.BaseShaderRegister = 0;
-    srvRange.RegisterSpace = 0;
-    srvRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-    D3D12_ROOT_PARAMETER rootParameters[2] = {};
-    rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[0].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[0].DescriptorTable.pDescriptorRanges = &cbvRange;
-    rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-    rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    rootParameters[1].DescriptorTable.NumDescriptorRanges = 1;
-    rootParameters[1].DescriptorTable.pDescriptorRanges = &srvRange;
-    rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-    staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
-    staticSampler.ShaderRegister = 0;
-    staticSampler.RegisterSpace = 0;
-    staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-    D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-    rootSignatureDesc.NumParameters = _countof(rootParameters);
-    rootSignatureDesc.pParameters = rootParameters;
-    rootSignatureDesc.NumStaticSamplers = 1;
-    rootSignatureDesc.pStaticSamplers = &staticSampler;
-    rootSignatureDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-    ComPtr<ID3DBlob> signature;
-    ComPtr<ID3DBlob> error;
-    if (FAILED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error))) {
-        if (error) {
-            DebugHelper::DebugPrint(std::string("루트 시그니처 직렬화 실패: ") + static_cast<const char*>(error->GetBufferPointer()));
-        }
+    if (!m_SceneRenderTarget.Init(rtParams)) {
         return false;
     }
-    m_D3D12Device->GetDevice()->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature));
 
-    // 텍스처 매니저 의존성 주입
+    return true;
+} // LoadSceneRenderTarget
+
+bool Renderer::LoadAssets(HWND hwnd) {
+    D3D12RootSignature::InitParams rootSigParams;
+    rootSigParams.device = m_D3D12Device->GetDevice();
+
+    if (!m_RootSignature->Init(rootSigParams)) {
+        DebugHelper::DebugPrint("루트 시그니처 초기화 실패");
+        return false;
+    }
+
+    PSOManager::InitParams psoInitParams;
+    psoInitParams.device = m_D3D12Device->GetDevice();
+    psoInitParams.mainRootSignature = m_RootSignature->GetRootSignature();
+    psoInitParams.rtvFormat = RendererState::RTVFormat;
+    psoInitParams.dsvFormat = DXGI_FORMAT_D32_FLOAT;
+
+    if (!m_PSOManager->Init(psoInitParams)) {
+        DebugHelper::DebugPrint("PSOManager 초기화 실패");
+        return false;
+    }
+
     TextureManager::InitParams texInit;
     texInit.device = m_D3D12Device->GetDevice();
     texInit.commandQueue = m_CommandQueue->GetQueue();
@@ -263,6 +226,20 @@ bool Renderer::LoadAssets(HWND hwnd) {
         DebugHelper::DebugPrint("TextureManager Init 실패");
         return false;
     }
+
+    StaticSponza::InitParams sponzaInitParams;
+    sponzaInitParams.device = m_D3D12Device->GetDevice();
+    sponzaInitParams.commandQueue = m_CommandQueue->GetQueue();
+    sponzaInitParams.rootSig = m_RootSignature->GetRootSignature();
+    sponzaInitParams.textureManager = m_TextureManager;
+    sponzaInitParams.path = SharedCommons::SPONZA_PATH;
+    sponzaInitParams.pso = m_PSOManager->GetPSO(SharedCommons::STATIC_SPONZA)->GetPSO();
+    sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
+    if (!m_Sponza->Init(sponzaInitParams)) {
+        DebugHelper::DebugPrint("StaticSponza 모델 초기화 실패");
+        return false;
+    }
+
     return true;
 } // LoadAssets
 
@@ -272,7 +249,7 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     guiParams.hwnd = hwnd;
     guiParams.device = m_D3D12Device->GetDevice();
     guiParams.numFramesInFlight = RendererState::FrameCount;
-    guiParams.rtvFormat = m_rtvFormat;
+    guiParams.rtvFormat = RendererState::RTVFormat;
     if (!m_ImGuiManager->Init(guiParams)) {
         return false;
     }
@@ -280,6 +257,16 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Performance GUI",
         [this]() { OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Directional Light GUI",
+        [this]() { m_DirectionalLight->OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Camera GUI",
+        [this]() { m_Camera->OnGUI(); }
     ));
 
     return true;
@@ -295,35 +282,19 @@ bool Renderer::InitCommonCBs() {
     const UINT frameCBSize = (sizeof(SharedCBs::FrameCB) + 255) & ~255;
     const UINT lightCBSize = (sizeof(SharedCBs::DirectionalLightCB) + 255) & ~255;
 
+    // FrameCB 리소스 생성 및 맵핑
     CD3DX12_RESOURCE_DESC frameCBDesc = CD3DX12_RESOURCE_DESC::Buffer(frameCBSize);
     m_D3D12Device->GetDevice()->CreateCommittedResource(
         &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &frameCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr, IID_PPV_ARGS(&m_frameCB));
     m_frameCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedFrameCB));
 
+    // LightCB 리소스 생성 및 맵핑
     CD3DX12_RESOURCE_DESC lightCBDesc = CD3DX12_RESOURCE_DESC::Buffer(lightCBSize);
     m_D3D12Device->GetDevice()->CreateCommittedResource(
         &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &lightCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr, IID_PPV_ARGS(&m_lightCB));
     m_lightCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedLightCB));
-
-    UINT frameCBVIndex = m_sharedDescriptorAllocator->Allocate();
-    UINT lightCBVIndex = m_sharedDescriptorAllocator->Allocate();
-    if (frameCBVIndex != RendererState::KFrameCBVIndex || lightCBVIndex != RendererState::KLightCBVIndex) {
-        DebugHelper::DebugPrint("공용 CBV가 예약된 인덱스(0,1)에 할당되지 않음 - 힙 할당 순서 확인 필요");
-        return false;
-    }
-
-    D3D12_CONSTANT_BUFFER_VIEW_DESC frameCbvDesc = {};
-    frameCbvDesc.BufferLocation = m_frameCB->GetGPUVirtualAddress();
-    frameCbvDesc.SizeInBytes = frameCBSize;
-    m_D3D12Device->GetDevice()->CreateConstantBufferView(&frameCbvDesc, m_sharedDescriptorAllocator->GetCPUHandle(RendererState::KFrameCBVIndex));
-
-    D3D12_CONSTANT_BUFFER_VIEW_DESC lightCbvDesc = {};
-    lightCbvDesc.BufferLocation = m_lightCB->GetGPUVirtualAddress();
-    lightCbvDesc.SizeInBytes = lightCBSize;
-    m_D3D12Device->GetDevice()->CreateConstantBufferView(&lightCbvDesc, m_sharedDescriptorAllocator->GetCPUHandle(RendererState::KLightCBVIndex));
-
     return true;
 } // InitCommonCBs
 
@@ -360,73 +331,71 @@ void Renderer::ShutdownCommonCBs() {
 } // ShutdownCommonCBs
 
 void Renderer::PopulateCommandList() {
-    // CommandQueue 객체를 이용해 Allocator 및 CommandList 일괄 리셋 진행
     m_CommandQueue->Reset();
     ID3D12GraphicsCommandList* cmdList = m_CommandQueue->GetList();
 
-    // 초기 파이프라인 스테이트 설정
-    if (m_pipelineState) {
-        cmdList->SetPipelineState(m_pipelineState.Get());
-    }
+    cmdList->SetGraphicsRootSignature(m_RootSignature->GetRootSignature());
 
-    cmdList->SetGraphicsRootSignature(m_rootSignature.Get());
-
-    // 공유 힙 바인딩
     ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
-    cmdList->SetGraphicsRootDescriptorTable(0, m_sharedDescriptorAllocator->GetGPUHandle(RendererState::KFrameCBVIndex));
-    cmdList->SetGraphicsRootDescriptorTable(1, m_sharedDescriptorAllocator->GetGPUHandle(RendererState::KReservedDescriptorCount));
+    // CBV 바인딩
+    cmdList->SetGraphicsRootConstantBufferView(0, m_frameCB->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(1, m_lightCB->GetGPUVirtualAddress());
 
-    // -----------------------------------------------------------------
-    // STEP 1: 오프스크린 SceneRenderTarget 렌더링 패스
-    // -----------------------------------------------------------------
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
-    // 내부적으로 Barrier(SRV->RTV), OMSetRenderTargets, Clear 처리가 제어됨
+    // 1. 오프스크린 타겟(씬 렌더 타겟) 세팅
     m_SceneRenderTarget.BeginRender(cmdList, clearColor);
 
-    m_GPUMonitor->RecordTimestamp(cmdList, 0);
-    // TODO(Sponza): 메쉬 그리기 구간 (IASet 버퍼 및 DrawIndexedInstanced)
-    m_GPUMonitor->RecordTimestamp(cmdList, 1);
+    cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
+    cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
-    // 내부적으로 Barrier(RTV->SRV) 처리되어 셰이더 읽기 가능 상태로 반환
+    m_GPUMonitor->RecordTimestamp(cmdList, 0);
+
+    // 2. 스폰자 씬 렌더링
+    m_RenderQueue->Clear();
+    m_Sponza->Submit(m_RenderQueue.get());
+    m_RenderQueue->Execute(cmdList);
+
+    m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget.EndRender(cmdList);
 
-    // -----------------------------------------------------------------
-    // STEP 2: 화면 출력용 SwapChain 백버퍼 쓰기 패스
-    // -----------------------------------------------------------------
-    // 백버퍼의 상태를 PRESENT -> RENDER_TARGET 으로 직접 배리어 전환
-    CD3DX12_RESOURCE_BARRIER toRenderTargetBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_SwapChain->GetCurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_PRESENT,
-        D3D12_RESOURCE_STATE_RENDER_TARGET
-    );
-    cmdList->ResourceBarrier(1, &toRenderTargetBarrier);
+    D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_SceneRenderTarget.GetColorResource(),
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_SwapChain->GetCurrentBackBuffer(),
+            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST)
+    };
+    cmdList->ResourceBarrier(2, preCopyBarriers);
+
+    cmdList->CopyResource(m_SwapChain->GetCurrentBackBuffer(), m_SceneRenderTarget.GetColorResource());
+
+    D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_SwapChain->GetCurrentBackBuffer(),
+            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(
+            m_SceneRenderTarget.GetColorResource(),
+            D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+    };
+    cmdList->ResourceBarrier(2, postCopyBarriers);
 
     D3D12_CPU_DESCRIPTOR_HANDLE swapChainRTV = m_SwapChain->GetCurrentRTVHandle();
     cmdList->OMSetRenderTargets(1, &swapChainRTV, FALSE, nullptr);
+    cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
+    cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
-    // 뷰포트 및 가위 사각형 설정 매칭
-    cmdList->RSSetViewports(1, &m_viewport);
-    cmdList->RSSetScissorRects(1, &m_scissorRect);
-
-    // 오프스크린 렌더 텍스처 결과를 화면 백버퍼로 다이렉트 복사
-    cmdList->CopyResource(m_SwapChain->GetCurrentBackBuffer(), m_SceneRenderTarget.GetColorResource());
-
-    // UI(ImGui) 오버레이 드로우
     m_ImGuiManager->RenderDrawData(cmdList);
 
-    // 백버퍼의 상태를 RENDER_TARGET -> PRESENT 로 롤백
     CD3DX12_RESOURCE_BARRIER toPresentBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_SwapChain->GetCurrentBackBuffer(),
-        D3D12_RESOURCE_STATE_RENDER_TARGET,
-        D3D12_RESOURCE_STATE_PRESENT
-    );
+        D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     cmdList->ResourceBarrier(1, &toPresentBarrier);
 
     m_GPUMonitor->ResolveQueryData(cmdList);
-
     cmdList->Close();
 } // PopulateCommandList
 

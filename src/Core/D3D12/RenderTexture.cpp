@@ -39,9 +39,10 @@ bool RenderTexture::Init(const InitParams& params) {
     D3D12_CLEAR_VALUE clearValue = {};
 
     if (m_type == RenderTextureType::Depth) {
-        desc.Format = DXGI_FORMAT_R32_TYPELESS;
+        desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-        clearValue.Format = DXGI_FORMAT_D32_FLOAT;
+
+        clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
         clearValue.DepthStencil.Depth = 1.0f;
         clearValue.DepthStencil.Stencil = 0;
     }
@@ -69,7 +70,7 @@ bool RenderTexture::Init(const InitParams& params) {
         }
 
         D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format = DXGI_FORMAT_D32_FLOAT;
+        dsvDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
         dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 
         UINT dsvIndex = params.dsvAllocator->Allocate();
@@ -77,7 +78,7 @@ bool RenderTexture::Init(const InitParams& params) {
         params.device->CreateDepthStencilView(m_resource.Get(), &dsvDesc, m_dsvHandle);
 
         D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-        srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
+        srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
         srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MipLevels = 1;
@@ -133,7 +134,9 @@ void RenderTexture::Clear(ID3D12GraphicsCommandList* cmdList, float r, float g, 
 } // Clear
 
 void RenderTexture::ClearDepth(ID3D12GraphicsCommandList* cmdList, float depth, UINT8 stencil) {
-    cmdList->ClearDepthStencilView(m_dsvHandle, D3D12_CLEAR_FLAG_DEPTH, depth, stencil, 0, nullptr);
+    cmdList->ClearDepthStencilView(m_dsvHandle, 
+        D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+        depth, stencil, 0, nullptr);
 } // ClearDepth
 
 ID3D12Resource* RenderTexture::GetResource() const {

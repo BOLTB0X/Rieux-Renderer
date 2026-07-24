@@ -50,6 +50,7 @@ private:
     void ProcessInput();
 
 private:
+    HWND  m_hwnd;
     bool  m_keys[256];
     bool  m_mouseButtons[3]; // 0: Left, 1: Right, 2: Middle
 
