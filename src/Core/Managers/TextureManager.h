@@ -38,6 +38,7 @@ private:
     void LoadTexture(const std::string&, bool keepCpuPixels = false);
     void BeginUpload();
     void EndUploadAndWait();
+    void CreateDummyTextures();
 
 private:
     ID3D12Device*                                              m_device;

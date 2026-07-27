@@ -17,17 +17,15 @@ public: // Screen
 public: // 프레임 및 디스크립터
     static UINT FrameCount;
     static UINT CBV_Table;
-    static UINT FrameCBV;
-    static UINT LightCBV;
+    static UINT FrameCBIndex;
+    static UINT LightCBIndex;
     static UINT WorldIndex;
     static UINT Tex0Index;
     static UINT Tex1Index;
     static UINT Tex2Index;
-    static UINT ReservedDescriptorCount;
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
     static UINT DSVCapacity;;
-
 
 public:
     static DXGI_FORMAT RTVFormat;

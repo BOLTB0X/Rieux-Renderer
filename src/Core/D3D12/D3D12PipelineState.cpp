@@ -23,6 +23,7 @@ D3D12PipelineState::InitParams::InitParams()
     depthStencilState.DepthEnable = TRUE;
     depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    rasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
 } // InitParams
 
 bool D3D12PipelineState::Init(const InitParams& params) {

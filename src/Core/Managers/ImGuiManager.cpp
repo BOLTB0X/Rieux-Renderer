@@ -13,6 +13,7 @@ ImGuiManager::ImGuiManager()
 } // ImGuiManager
 
 ImGuiManager::~ImGuiManager() {
+    Shutdown();
 } // ~ImGuiManager
 
 bool ImGuiManager::Init(const InitParams& initParams) {
@@ -54,6 +55,12 @@ void ImGuiManager::Shutdown() {
         ImGui::DestroyContext();
         m_isInitialized = false;
     }
+
+    if (m_srvHeap) {
+        m_srvHeap.Reset();
+    }
+
+    m_isInitialized = false;
 } // Shutdown
 
 void ImGuiManager::Render() {

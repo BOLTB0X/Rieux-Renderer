@@ -15,8 +15,12 @@ public:
 
     bool Init(ID3D12Device*, ID3D12GraphicsCommandList*,
         DescriptorHeapAllocator*, const std::string&,
-        Microsoft::WRL::ComPtr<ID3D12Resource>&, bool keepCpuPixels = false);
+        Microsoft::WRL::ComPtr<ID3D12Resource>&, bool keepCpuPixels = false); // 외부 에셋 로딩
+    bool Init(ID3D12Device*, ID3D12GraphicsCommandList*,
+        DescriptorHeapAllocator*, const uint8_t* rgbaData, UINT width, UINT height,
+        Microsoft::WRL::ComPtr<ID3D12Resource>& outUploadBuffer); // 자체 더미 생성
 
+public:
     UINT                      GetSRVIndex() const;
     ID3D12Resource*           GetResource() const;
     float                     GetPixelHeight(int, int) const;

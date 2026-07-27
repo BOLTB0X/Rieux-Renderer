@@ -7,6 +7,20 @@
 // STL
 #include <vector>
 #include <memory>
+//
+#include <dxgidebug.h>
+
+#pragma comment(lib, "dxguid.lib")
+
+void ReportLiveObjects() {
+    Microsoft::WRL::ComPtr<IDXGIDebug1> dxgiDebug;
+    if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(&dxgiDebug)))) {
+        dxgiDebug->ReportLiveObjects(
+            DXGI_DEBUG_ALL,
+            static_cast<DXGI_DEBUG_RLO_FLAGS>(DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL)
+        );
+    }
+} // ReportLiveObjects
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline, int iCmdshow)
 {
@@ -29,6 +43,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline,
             system->Run();
         }
     }
-
+    ReportLiveObjects();
     return 0;
 } // WinMain

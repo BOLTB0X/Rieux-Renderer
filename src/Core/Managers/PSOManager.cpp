@@ -1,8 +1,7 @@
 #include "Pch.h"
 #include "PSOManager.h"
 // D3D12
-#include "D3D12/D3D12PipelineState.h"
-#include "D3D12/d3dx12.h"
+#include "d3dx12.h"
 // Uitls
 #include "ShaderHelper.h"
 #include "DebugHelper.h"
@@ -63,8 +62,8 @@ bool PSOManager::BuildStaticSponzaPSO() {
         return false;
     }
 
-    m_shaderBlobs[SharedCommons::STATIC_SPONZA_VS_STR] = vsBlob;
-    m_shaderBlobs[SharedCommons::STATIC_SPONZA_PS_STR] = psBlob;
+    m_shaderBlobs[SharedCommons::CPU_SPONZA_VS_STR] = vsBlob;
+    m_shaderBlobs[SharedCommons::CPU_SPONZA_PS_STR] = psBlob;
 
     std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -74,27 +73,75 @@ bool PSOManager::BuildStaticSponzaPSO() {
         { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
-    D3D12PipelineState::InitParams psoParams;
-    psoParams.device = m_device;
-    psoParams.rootSignature = m_mainRootSignature;
-    psoParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
-    psoParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
-    psoParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
-    psoParams.numRenderTargets = 1;
-    psoParams.rtvFormats[0] = m_rtvFormat;
-    psoParams.dsvFormat = m_dsvFormat;
-    psoParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    D3D12PipelineState::InitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = m_mainRootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = m_rtvFormat;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    // 버퍼 공통 설정 
+    baseParams.depthStencilState.DepthEnable = TRUE;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 
-    psoParams.depthStencilState.DepthEnable = TRUE;
-    psoParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    psoParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    bool result = true;
 
-    auto sponzaPSO = std::make_unique<D3D12PipelineState>();
-    if (!sponzaPSO->Init(psoParams)) {
-        DebugHelper::DebugPrint("StaticSponza PSO 초기화 실패");
-        return false;
+    result &= BuildSolidCullBack(SharedCommons::KEY_SPONZA_SOLID_CULL, baseParams);
+    result &= BuildSolidCullNone(SharedCommons::KEY_SPONZA_SOLID_NO_CULL, baseParams);
+    result &= BuildWireframeCullBack(SharedCommons::KEY_SPONZA_WIRE_CULL, baseParams);
+    result &= BuildWireframeCullNone(SharedCommons::KEY_SPONZA_WIRE_NO_CULL, baseParams);
+
+    if (!result) {
+        DebugHelper::DebugPrint("CPUSponza PSO 변형 초기화 실패");
     }
 
-    m_psoMap[SharedCommons::STATIC_SPONZA] = std::move(sponzaPSO);
-    return true;
+    return result;
 } // BuildStaticSponzaPSO
+
+bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::InitParams params) {
+    params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    params.rasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->Init(params)) return false;
+
+    m_psoMap[psoName] = std::move(pso);
+    return true;
+} // BuildSolidCullBack
+
+bool PSOManager::BuildSolidCullNone(const std::string& psoName, D3D12PipelineState::InitParams params) {
+    params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    params.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->Init(params)) return false;
+
+    m_psoMap[psoName] = std::move(pso);
+    return true;
+} // BuildSolidCullNone
+
+bool PSOManager::BuildWireframeCullBack(const std::string& psoName, D3D12PipelineState::InitParams params) {
+    params.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+    params.rasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->Init(params)) return false;
+
+    m_psoMap[psoName] = std::move(pso);
+    return true;
+} // BuildWireframeCullBack
+
+bool PSOManager::BuildWireframeCullNone(const std::string& psoName, D3D12PipelineState::InitParams params) {
+    params.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+    params.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->Init(params)) return false;
+
+    m_psoMap[psoName] = std::move(pso);
+    return true;
+} // BuildWireframeCullNone

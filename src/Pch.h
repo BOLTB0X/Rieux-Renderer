@@ -38,14 +38,16 @@
 #include <wrl/client.h>
 
 // DirectX 12
-#include <directx/d3d12.h>
-#include <directx/d3dx12.h>
+// SDK 헤더는 기본 include 경로의 표준 이름을 사용합니다. 프로젝트에 로컬 d3dx12.h가
+// 포함되어 있는 경우(예: src/Core/D3D12/d3dx12.h)엔 로컬 헤더를 직접 포함하도록 합니다.
+#include <d3d12.h>
+#include "d3dx12.h"
 
 // DXGI 및 기타 SDK 헤더
 #include <dxgi1_6.h>
 #include <dxgidebug.h>
-#include <directxmath.h>
-#include <directxcolors.h>
+#include <DirectXMath.h>
+#include <DirectXColors.h>
 
 // ==========================================
 // DirectXTK12

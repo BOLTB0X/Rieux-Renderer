@@ -60,6 +60,19 @@ void CommandQueue::Shutdown() {
         CloseHandle(m_fenceEvent);
         m_fenceEvent = nullptr;
     }
+
+    if (m_commandList) {
+        m_commandList.Reset();
+    }
+    if (m_commandAllocator) {
+        m_commandAllocator.Reset();
+    }
+    if (m_commandQueue) {
+        m_commandQueue.Reset();
+    }
+    if (m_fence) {
+        m_fence.Reset();
+    }
 } // Shutdown
 
 void CommandQueue::Reset() {
@@ -68,7 +81,6 @@ void CommandQueue::Reset() {
 } // Reset
 
 void CommandQueue::Execute() {
-    m_commandList->Close();
     ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 } // Execute

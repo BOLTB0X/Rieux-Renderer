@@ -6,6 +6,7 @@
 #include "D3D12SwapChain.h"
 #include "D3D12RootSignature.h"
 #include "D3D12PipelineState.h"
+#include "D3D12/RenderTarget.h"
 // Managers
 #include "RenderTextureManager.h"
 #include "TextureManager.h"
@@ -18,7 +19,7 @@
 #include "DirectionalLight.h"
 #include "GPUMonitor.h"
 // World
-#include "World/StaticSponza.h"
+#include "World/CPUSponza.h"
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
@@ -30,11 +31,12 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 Renderer::Renderer()
-    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{} {
+    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{}, m_enableWireframe(false), m_enableCulling(true) {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
     m_RootSignature = std::make_unique<D3D12RootSignature>();
+    m_SceneRenderTarget = std::make_unique<RenderTarget>();
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
@@ -46,7 +48,7 @@ Renderer::Renderer()
 
     m_RenderTextureManager = std::make_unique<RenderTextureManager>();
     m_PSOManager = std::make_shared<PSOManager>();
-    m_Sponza = std::make_unique<StaticSponza>();
+    m_Sponza = std::make_unique<CPUSponza>();
 } // Renderer
 
 Renderer::~Renderer() {
@@ -79,10 +81,44 @@ bool Renderer::Init(const InitParams& params) {
 
 void Renderer::Shutdown() {
     if (m_CommandQueue) {
-        m_CommandQueue->Shutdown();
+        m_CommandQueue->WaitForPreviousFrame();
     }
 
+    // 2. LoadGUIs 역순 해제
+    // (UI 리소스 및 렌더 타겟 참조 해제)
+    m_ImGuiManager.reset();
+
+    // 3. LoadAssets 역순 해제
+    m_Sponza.reset();
+    m_TextureManager.reset();
+    m_PSOManager.reset();
+    m_RootSignature.reset();
+
+    // LoadSceneRenderTarget 역순 해제
+    m_SceneRenderTarget.reset();
+    m_RenderTextureManager.reset();
+
+    // LoadPipeline 역순 해제
+    m_GPUMonitor.reset();
+
+    // 상수 버퍼 해제
     ShutdownCommonCBs();
+
+    m_sharedDescriptorAllocator.reset();
+    m_SwapChain.reset();
+
+    if (m_CommandQueue) {
+        m_CommandQueue->Shutdown();
+        m_CommandQueue.reset();
+    }
+
+    // 기타 컴포넌트 해제
+    m_RenderQueue.reset();
+    m_DirectionalLight.reset();
+    m_Camera.reset();
+
+    // 디바이스 최종 해제
+    m_D3D12Device.reset();
 } // Shutdown
 
 bool Renderer::Frame(const FrameParams& frameParams) {
@@ -119,6 +155,13 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     if (!m_D3D12Device->Init()) {
         DebugHelper::DebugPrint("D3D12Device 초기화 실패");
         return false;
+    }
+    else {
+        ComPtr<ID3D12InfoQueue> infoQueue;
+        if (SUCCEEDED(m_D3D12Device->GetDevice()->QueryInterface(IID_PPV_ARGS(&infoQueue)))) {
+            infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+            infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+        }
     }
 
     // 메인 다이렉트 커맨드 큐 초기화
@@ -189,7 +232,7 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     rtParams.colorFormat = RendererState::RTVFormat;
     rtParams.depthFormat = DXGI_FORMAT_D32_FLOAT;
 
-    if (!m_SceneRenderTarget.Init(rtParams)) {
+    if (!m_SceneRenderTarget->Init(rtParams)) {
         return false;
     }
 
@@ -227,16 +270,19 @@ bool Renderer::LoadAssets(HWND hwnd) {
         return false;
     }
 
-    StaticSponza::InitParams sponzaInitParams;
+    CPUSponza::InitParams sponzaInitParams;
     sponzaInitParams.device = m_D3D12Device->GetDevice();
     sponzaInitParams.commandQueue = m_CommandQueue->GetQueue();
     sponzaInitParams.rootSig = m_RootSignature->GetRootSignature();
     sponzaInitParams.textureManager = m_TextureManager;
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
-    sponzaInitParams.pso = m_PSOManager->GetPSO(SharedCommons::STATIC_SPONZA)->GetPSO();
+    sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_SOLID_NO_CULL)->GetPSO();
+    sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_WIRE_CULL)->GetPSO();
+    sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_Sponza->Init(sponzaInitParams)) {
-        DebugHelper::DebugPrint("StaticSponza 모델 초기화 실패");
+        DebugHelper::DebugPrint("CPUSponza 모델 초기화 실패");
         return false;
     }
 
@@ -267,6 +313,11 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Camera GUI",
         [this]() { m_Camera->OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Sponza GUI",
+        [this]() { m_Sponza->OnGUI(); }
     ));
 
     return true;
@@ -340,30 +391,31 @@ void Renderer::PopulateCommandList() {
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
     // CBV 바인딩
-    cmdList->SetGraphicsRootConstantBufferView(0, m_frameCB->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootConstantBufferView(1, m_lightCB->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_frameCB->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_lightCB->GetGPUVirtualAddress());
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
-    // 1. 오프스크린 타겟(씬 렌더 타겟) 세팅
-    m_SceneRenderTarget.BeginRender(cmdList, clearColor);
+    // 오프스크린 타겟(씬 렌더 타겟) 세팅
+    m_SceneRenderTarget->BeginRender(cmdList, clearColor);
 
     cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     m_GPUMonitor->RecordTimestamp(cmdList, 0);
 
-    // 2. 스폰자 씬 렌더링
+
+    // 스폰자 씬 렌더링
     m_RenderQueue->Clear();
     m_Sponza->Submit(m_RenderQueue.get());
     m_RenderQueue->Execute(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
-    m_SceneRenderTarget.EndRender(cmdList);
+    m_SceneRenderTarget->EndRender(cmdList);
 
     D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {
         CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SceneRenderTarget.GetColorResource(),
+            m_SceneRenderTarget->GetColorResource(),
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_SwapChain->GetCurrentBackBuffer(),
@@ -371,14 +423,14 @@ void Renderer::PopulateCommandList() {
     };
     cmdList->ResourceBarrier(2, preCopyBarriers);
 
-    cmdList->CopyResource(m_SwapChain->GetCurrentBackBuffer(), m_SceneRenderTarget.GetColorResource());
+    cmdList->CopyResource(m_SwapChain->GetCurrentBackBuffer(), m_SceneRenderTarget->GetColorResource());
 
     D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {
         CD3DX12_RESOURCE_BARRIER::Transition(
             m_SwapChain->GetCurrentBackBuffer(),
             D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET),
         CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SceneRenderTarget.GetColorResource(),
+            m_SceneRenderTarget->GetColorResource(),
             D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
     };
     cmdList->ResourceBarrier(2, postCopyBarriers);
@@ -421,4 +473,6 @@ void Renderer::OnGUI() {
     double opaquePassTime = m_GPUMonitor->GetTimeMs(0, 1);
     ImGui::Text("Sponza Opaque Pass: %.3f ms", opaquePassTime);
     ImGui::ProgressBar(static_cast<float>(opaquePassTime / 16.6), ImVec2(200.0f, 0.0f), "");
+    ImGui::Separator();
+
 } // OnGUI

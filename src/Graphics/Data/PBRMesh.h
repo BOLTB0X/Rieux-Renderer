@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <vector>
 #include <DirectXMath.h>
+#include <string>
 
 class PBRMesh {
 public:
@@ -24,8 +25,10 @@ public:
         const std::vector<PBRVertex>*    vertices;
         const std::vector<unsigned int>* indices;
         unsigned int                     materialIndex;
+        std::string                      name;
 
-        InitParams() : device(nullptr), uploadCmdList(nullptr), vertices(nullptr), indices(nullptr), materialIndex(0) {
+        InitParams() : device(nullptr), uploadCmdList(nullptr), vertices(nullptr), indices(nullptr), 
+            materialIndex(0), name("") {
         } // InitParams
     }; // InitParams
 
@@ -42,8 +45,10 @@ public:
     void BindBuffers(ID3D12GraphicsCommandList*);
     void Render(ID3D12GraphicsCommandList*);
 
-    unsigned int GetMaterialIndex() const;
-    UINT         GetIndexCount() const;
+public:
+    unsigned int       GetMaterialIndex() const;
+    UINT               GetIndexCount() const;
+    const std::string& GetName() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
@@ -52,4 +57,5 @@ private:
     D3D12_INDEX_BUFFER_VIEW                m_ibView;
     UINT                                   m_indexCount;
     UINT                                   m_materialIndex;
+    std::string                            m_name;
 }; // PBRMesh

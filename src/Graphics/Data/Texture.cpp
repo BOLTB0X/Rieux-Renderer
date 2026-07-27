@@ -32,6 +32,18 @@ bool Texture::Init(ID3D12Device* device, ID3D12GraphicsCommandList* uploadCmdLis
         m_resource, outUploadBuffer, m_srvIndex);
 } // Init
 
+bool Texture::Init(ID3D12Device* device, ID3D12GraphicsCommandList* uploadCmdList,
+    DescriptorHeapAllocator* descriptorAllocator, const uint8_t* rgbaData, UINT width, UINT height,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& outUploadBuffer) {
+
+    m_width = width;
+    m_height = height;
+
+    return TextureLoader::CreateTextureFromMemory(
+        device, uploadCmdList, descriptorAllocator,
+        rgbaData, width, height, m_resource, outUploadBuffer, m_srvIndex);
+} // Init
+
 UINT Texture::GetSRVIndex() const {
     return m_srvIndex;
 } // GetSRVIndex

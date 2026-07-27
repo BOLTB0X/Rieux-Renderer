@@ -7,6 +7,7 @@ RenderQueue::RenderQueue() {
 } // RenderQueue
 
 RenderQueue::~RenderQueue() {
+    Clear();
 } // ~RenderQueue
 
 void RenderQueue::Init() {

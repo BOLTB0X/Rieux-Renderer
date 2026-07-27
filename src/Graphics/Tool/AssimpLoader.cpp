@@ -171,6 +171,7 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
     meshParams.vertices = &vertices;
     meshParams.indices = &indices;
     meshParams.materialIndex = mesh->mMaterialIndex;
+    meshParams.name = mesh->mName.C_Str();
 
     ComPtr<ID3D12Resource> vbUpload;
     ComPtr<ID3D12Resource> ibUpload;
@@ -198,14 +199,15 @@ void AssimpLoader::ProcessMaterials(const aiScene* scene, const std::string& dir
         aiMat->Get(AI_MATKEY_NAME, name);
         material.name = name.C_Str();
 
-        // Albedo (MTL: map_Kd)
         material.albedo = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE, PBRTextureType::Albedo);
+        if (!material.albedo) {
+            material.albedo = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
+        }
         aiColor4D baseColor(SharedCommons::ALBEDO_FACTOR.x, SharedCommons::ALBEDO_FACTOR.y,
             SharedCommons::ALBEDO_FACTOR.z, SharedCommons::ALBEDO_FACTOR.w);
         aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor);
         material.albedoFactor = { baseColor.r, baseColor.g, baseColor.b, baseColor.a };
 
-        // Normal (MTL: bump, map_bump, map_Disp)
         material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_DISPLACEMENT, PBRTextureType::Normal);
         if (!material.normal) {
             material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_NORMALS, PBRTextureType::Normal);
@@ -213,11 +215,15 @@ void AssimpLoader::ProcessMaterials(const aiScene* scene, const std::string& dir
         if (!material.normal) {
             material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_HEIGHT, PBRTextureType::Normal);
         }
+        if (!material.normal) {
+            material.normal = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_NORMAL);
+        }
 
-        // Alpha (MTL: map_d)
         material.alpha = LoadMaterialElement(aiMat, directory, aiTextureType_OPACITY, PBRTextureType::Alpha);
+        if (!material.alpha) {
+            material.alpha = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
+        }
 
-        // Roughness (MTL PBR Extension: map_Pr)
         material.roughness = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE_ROUGHNESS, PBRTextureType::Roughness);
         if (!material.roughness) {
             float rgh = 0.8f;

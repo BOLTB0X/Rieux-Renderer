@@ -51,6 +51,8 @@ bool TextureManager::Init(const InitParams& params) {
 
     BeginUpload();
 
+    CreateDummyTextures();
+
     EndUploadAndWait();
 
     return true;
@@ -85,8 +87,6 @@ void TextureManager::EndUploadAndWait() {
         WaitForSingleObject(m_uploadFenceEvent, INFINITE);
     }
 
-    // GPU 복사가 끝났으니
-    // 중간 업로드 힙은 이제 해제해도 안전함
     m_pendingUploadBuffers.clear();
 } // EndUploadAndWait
 
@@ -107,6 +107,28 @@ void TextureManager::LoadTexture(const std::string& filename, bool keepCpuPixels
         m_pendingUploadBuffers.push_back(uploadBuffer);
     }
 } // LoadTexture
+
+void TextureManager::CreateDummyTextures() {
+    // 1x1 픽셀 데이터 정의
+    uint8_t whitePixel[4] = { 255, 255, 255, 255 }; 
+    uint8_t normalPixel[4] = { 128, 128, 255, 255 };
+
+    // 흰색 더미 생성 및 캐싱
+    auto dummyWhite = std::make_shared<Texture>();
+    Microsoft::WRL::ComPtr<ID3D12Resource> whiteUpload;
+    if (dummyWhite->Init(m_device, m_uploadCommandList.Get(), m_descriptorAllocator, whitePixel, 1, 1, whiteUpload)) {
+        m_pendingUploadBuffers.push_back(whiteUpload);
+        m_Textures[SharedCommons::KEY_DUMMEY_WHITE] = dummyWhite;
+    }
+
+    // 노멀 더미 생성 및 캐싱
+    auto dummyNormal = std::make_shared<Texture>();
+    Microsoft::WRL::ComPtr<ID3D12Resource> normalUpload;
+    if (dummyNormal->Init(m_device, m_uploadCommandList.Get(), m_descriptorAllocator, normalPixel, 1, 1, normalUpload)) {
+        m_pendingUploadBuffers.push_back(normalUpload);
+        m_Textures[SharedCommons::KEY_DUMMEY_NORMAL] = dummyNormal;
+    }
+} // CreateDummyTextures
 
 std::shared_ptr<Texture> TextureManager::GetTexture(const std::string& filename, bool keepCpuPixels) {
     {

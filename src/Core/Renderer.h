@@ -9,13 +9,14 @@
 #include <string>
 #include <memory>
 #include "RendererState.h"
-#include "D3D12/RenderTarget.h"
+
 
 class D3D12Device;
 class CommandQueue;
 class D3D12SwapChain;
 class D3D12RootSignature;
 class D3D12PipelineState;
+class RenderTarget;
 class PSOManager;
 class RenderQueue;
 class Camera;
@@ -25,7 +26,7 @@ class TextureManager;
 class DescriptorHeapAllocator;
 class ImGuiManager;
 class RenderTextureManager;
-class StaticSponza;
+class CPUSponza;
 
 class Renderer {
 public:
@@ -93,7 +94,7 @@ private:
     std::unique_ptr<D3D12RootSignature>      m_RootSignature;
     std::unique_ptr<DescriptorHeapAllocator> m_sharedDescriptorAllocator;
     std::unique_ptr<RenderTextureManager>    m_RenderTextureManager;
-    RenderTarget                             m_SceneRenderTarget;
+    std::unique_ptr<RenderTarget>            m_SceneRenderTarget;
     // --------------------------------------------------
     // 공용 데이터
     // --------------------------------------------------
@@ -112,5 +113,7 @@ private:
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------
-    std::unique_ptr<StaticSponza>            m_Sponza;
+    std::unique_ptr<CPUSponza>               m_Sponza;
+    bool                                     m_enableWireframe;
+    bool                                     m_enableCulling;
 }; // Renderer

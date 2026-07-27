@@ -44,8 +44,10 @@ namespace SharedCommons {
 
 namespace SharedCommons {
     static constexpr DirectX::XMFLOAT3 LIGHT_DIR = { 0.0f, -1.0f, 0.0f };
-    static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 255.0f * (3.0f / 255.0f), 250.0f * (3.0f / 255.0f), 245.0f * (3.0f / 255.0f), 1.0f };
-    static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 1.0f, 0.9f, 0.85f, 1.0f };
+
+    static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 1.0f, 0.98f, 0.96f, 1.0f };
+
+    static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.15f, 0.15f, 0.15f, 1.0f };
 } // CB
 
 namespace SharedCommons {
@@ -54,10 +56,21 @@ namespace SharedCommons {
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
     static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";
-    static const std::string  STATIC_SPONZA_VS_STR = "StaticSponzaVS";
-    static const std::string  STATIC_SPONZA_PS_STR = "StaticSponzaPS";
-    static const std::string  STATIC_SPONZA= "StaticSponza";
+    static const std::wstring SPONZA_FLAT_PS = L"HLSL/FlatSponzaPS.hlsl";
+    static const std::string  CPU_SPONZA_VS_STR = "CPUSponzaVS";
+    static const std::string  CPU_SPONZA_PS_STR = "CPUSponzaPS";
 } // HLSL
+
+namespace SharedCommons {
+    static const std::string  KEY_STATIC_SPONZA = "CPUSponza";
+
+    static const std::string  KEY_DUMMEY_WHITE = "DummeyWhite";
+    static const std::string  KEY_DUMMEY_NORMAL = "DummeyNORMAL";
+    static const std::string  KEY_SPONZA_SOLID_CULL = "CPUSponza_SOLID_CULL";
+    static const std::string  KEY_SPONZA_SOLID_NO_CULL = "CPUSponza_SOLID_NOCULL";
+    static const std::string  KEY_SPONZA_WIRE_CULL = "CPUSponza_WIRE_CULL";
+    static const std::string  KEY_SPONZA_WIRE_NO_CULL = "CPUSponza_WIRE_NOCULL";
+} // MAP - KEY
 
 namespace SharedCommons {
     static const std::string SPONZA_PATH = "assets/Sponza/sponza.obj";

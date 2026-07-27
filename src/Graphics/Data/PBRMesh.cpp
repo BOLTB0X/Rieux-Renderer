@@ -23,6 +23,7 @@ bool PBRMesh::Init(const InitParams& params,
 
     m_indexCount = static_cast<UINT>(params.indices->size());
     m_materialIndex = params.materialIndex;
+    m_name = params.name;
 
     const UINT vbSize = static_cast<UINT>(sizeof(PBRVertex) * params.vertices->size());
     const UINT ibSize = static_cast<UINT>(sizeof(unsigned int) * params.indices->size());
@@ -117,3 +118,7 @@ unsigned int PBRMesh::GetMaterialIndex() const {
 UINT PBRMesh::GetIndexCount() const {
     return m_indexCount;
 } // GetIndexCount
+
+const std::string& PBRMesh::GetName() const {
+    return m_name;
+} // GetName

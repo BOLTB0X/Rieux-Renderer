@@ -177,3 +177,69 @@ bool TextureLoader::CreateTextureFromFile(
 
     return true;
 } // CreateTextureFromFile
+
+bool TextureLoader::CreateTextureFromMemory(
+    ID3D12Device* device,
+    ID3D12GraphicsCommandList* uploadCmdList,
+    DescriptorHeapAllocator* descriptorAllocator,
+    const uint8_t* rgbaData,
+    UINT width, UINT height,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& outResource,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& outUploadBuffer,
+    UINT& outSRVIndex) {
+
+    // 기본 리소스
+    D3D12_RESOURCE_DESC texDesc = {};
+    texDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    texDesc.Width = width;
+    texDesc.Height = height;
+    texDesc.DepthOrArraySize = 1;
+    texDesc.MipLevels = 1;
+    texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    texDesc.SampleDesc.Count = 1;
+    texDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    texDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+    CD3DX12_HEAP_PROPERTIES defaultHeapProps(D3D12_HEAP_TYPE_DEFAULT);
+    if (FAILED(device->CreateCommittedResource(
+        &defaultHeapProps, D3D12_HEAP_FLAG_NONE, &texDesc,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&outResource)))) {
+        return false;
+    }
+
+    // 업로드 버퍼
+    UINT64 uploadBufferSize = GetRequiredIntermediateSize(outResource.Get(), 0, 1);
+    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_RESOURCE_DESC uploadDesc = CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize);
+
+    if (FAILED(device->CreateCommittedResource(
+        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &uploadDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&outUploadBuffer)))) {
+        return false;
+    }
+
+    // 데이터 복사 명령 기록
+    D3D12_SUBRESOURCE_DATA subData = {};
+    subData.pData = rgbaData;
+    subData.RowPitch = width * 4;
+    subData.SlicePitch = subData.RowPitch * height;
+
+    UpdateSubresources(uploadCmdList, outResource.Get(), outUploadBuffer.Get(), 0, 0, 1, &subData);
+
+    // 리소스 상태 변경 (COPY_DEST -> PIXEL_SHADER_RESOURCE)
+    CD3DX12_RESOURCE_BARRIER barrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        outResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    uploadCmdList->ResourceBarrier(1, &barrier);
+
+    // SRV 생성 및 디스크립터 할당
+    outSRVIndex = descriptorAllocator->Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    device->CreateShaderResourceView(outResource.Get(), &srvDesc, descriptorAllocator->GetCPUHandle(outSRVIndex));
+
+    return true;
+} // CreateTextureFromMemory
