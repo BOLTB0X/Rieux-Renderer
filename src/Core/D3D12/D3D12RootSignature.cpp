@@ -7,78 +7,124 @@
 
 using namespace Microsoft::WRL;
 
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddCBV(const std::string& tag,
+    UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility) {
+    m_paramIndexByTag[tag] = static_cast<UINT>(m_rootParameters.size());
+
+    D3D12_ROOT_PARAMETER param = {};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    param.Descriptor.ShaderRegister = shaderRegister;
+    param.ShaderVisibility = visibility;
+
+    m_rootParameters.push_back(param);
+    return *this;
+} // AddCBV
+
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddConstants(const std::string& tag,
+    UINT shaderRegister, UINT num32BitValues, D3D12_SHADER_VISIBILITY visibility) {
+    m_paramIndexByTag[tag] = static_cast<UINT>(m_rootParameters.size());
+
+    D3D12_ROOT_PARAMETER param = {};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    param.Constants.ShaderRegister = shaderRegister;
+    param.Constants.Num32BitValues = num32BitValues;
+    param.ShaderVisibility = visibility;
+
+    m_rootParameters.push_back(param);
+    return *this;
+} // AddConstants
+
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddSRV(const std::string& tag,
+    UINT shaderRegister, UINT registerSpace, D3D12_SHADER_VISIBILITY visibility) {
+    m_paramIndexByTag[tag] = static_cast<UINT>(m_rootParameters.size());
+
+    D3D12_ROOT_PARAMETER param = {};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    param.Descriptor.ShaderRegister = shaderRegister;
+    param.Descriptor.RegisterSpace = registerSpace;
+    param.ShaderVisibility = visibility;
+
+    m_rootParameters.push_back(param);
+    return *this;
+} // AddSRV
+
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddSRVTable(const std::string& tag,
+    UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility, UINT numDescriptors, UINT registerSpace) {
+    m_paramIndexByTag[tag] = static_cast<UINT>(m_rootParameters.size());
+
+    D3D12_DESCRIPTOR_RANGE range = {
+        D3D12_DESCRIPTOR_RANGE_TYPE_SRV, numDescriptors, shaderRegister, registerSpace,
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+    };
+    m_descriptorRanges.push_back(range);
+
+    D3D12_ROOT_PARAMETER param = {};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    param.DescriptorTable.NumDescriptorRanges = 1;
+    param.DescriptorTable.pDescriptorRanges = &m_descriptorRanges.back();
+    param.ShaderVisibility = visibility;
+
+    m_rootParameters.push_back(param);
+    return *this;
+} // AddSRVTable
+
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddStaticSampler(
+    UINT shaderRegister, D3D12_FILTER filter,
+    D3D12_TEXTURE_ADDRESS_MODE addressMode, D3D12_SHADER_VISIBILITY visibility) {
+    D3D12_STATIC_SAMPLER_DESC sampler = {};
+    sampler.Filter = filter;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = addressMode;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderRegister = shaderRegister;
+    sampler.ShaderVisibility = visibility;
+    m_staticSamplers.push_back(sampler);
+
+    return *this;
+} // AddStaticSampler
+
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::SetFlags(D3D12_ROOT_SIGNATURE_FLAGS flags) {
+    m_flags = flags;
+    return *this;
+} // SetFlags
+
 bool D3D12RootSignature::Init(const InitParams& params) {
-	if (!params.device) {
-		DebugHelper::DebugPrint("D3D12RootSignature 초기화 실패");
-		return false;
-	}
+    if (!params.device) {
+        DebugHelper::DebugPrint("D3D12RootSignature 초기화 실패");
+        return false;
+    }
 
-	// 각 텍스처 슬롯(t0, t1, t2)을 위한 독립된 레인지 설정 (개수 1개씩)
-	D3D12_DESCRIPTOR_RANGE albedoRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND }; // t0
-	D3D12_DESCRIPTOR_RANGE normalRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND }; // t1
-	D3D12_DESCRIPTOR_RANGE alphaRange = { D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2, 0, D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND }; // t2
+    const auto& b = params.builder;
+    D3D12_ROOT_SIGNATURE_DESC desc = {
+        static_cast<UINT>(b.m_rootParameters.size()), b.m_rootParameters.data(),
+        static_cast<UINT>(b.m_staticSamplers.size()), b.m_staticSamplers.data(),
+        b.m_flags
+    };
 
-	// 루트 파라미터 구성 (총 6개)
-	D3D12_ROOT_PARAMETER rootParameters[6] = {};
+    Microsoft::WRL::ComPtr<ID3DBlob> signature, error;
+    if (FAILED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error))) {
+        if (error) {
+            DebugHelper::DebugPrint(static_cast<const char*>(error->GetBufferPointer()));
+        }
+        return false;
+    }
+    if (FAILED(params.device->CreateRootSignature(0, signature->GetBufferPointer(),
+        signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)))) {
+        return false;
+    }
 
-	// [0] Frame CB (b0)
-	rootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[0].Descriptor.ShaderRegister = 0;
-	rootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	// [1] Light CB (b1)
-	rootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParameters[1].Descriptor.ShaderRegister = 1;
-	rootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-	// [2] World Matrix (b2) - 32비트 루트 상수
-	rootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParameters[2].Constants.ShaderRegister = 2;
-	rootParameters[2].Constants.Num32BitValues = 16;
-	rootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	// [3] Albedo Tex (t0 슬롯용 테이블)
-	rootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParameters[3].DescriptorTable.NumDescriptorRanges = 1;
-	rootParameters[3].DescriptorTable.pDescriptorRanges = &albedoRange;
-	rootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	// [4] Normal Tex (t1 슬롯용 테이블)
-	rootParameters[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParameters[4].DescriptorTable.NumDescriptorRanges = 1;
-	rootParameters[4].DescriptorTable.pDescriptorRanges = &normalRange;
-	rootParameters[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	// [5] Alpha Tex (t2 슬롯용 테이블)
-	rootParameters[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParameters[5].DescriptorTable.NumDescriptorRanges = 1;
-	rootParameters[5].DescriptorTable.pDescriptorRanges = &alphaRange;
-	rootParameters[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	// 스태틱 샘플러 설정 (s0)
-	D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-	staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	staticSampler.MaxLOD = D3D12_FLOAT32_MAX;
-	staticSampler.ShaderRegister = 0;
-	staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	// 루트 시그니처 직렬화 및 생성
-	D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = { _countof(rootParameters), rootParameters, 1, &staticSampler, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT };
-
-	Microsoft::WRL::ComPtr<ID3DBlob> signature, error;
-	if (FAILED(D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error))) {
-		return false;
-	}
-	if (FAILED(params.device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)))) {
-		return false;
-	}
-
-	return true;
-}
+    m_paramIndexMap = b.m_paramIndexByTag;
+    return true;
+} // Init
 
 ID3D12RootSignature* D3D12RootSignature::GetRootSignature() const {
 	return m_rootSignature.Get();
 } // GetRootSignature
+
+UINT D3D12RootSignature::GetParamIndex(const std::string& tag) const {
+    auto it = m_paramIndexMap.find(tag);
+    if (it == m_paramIndexMap.end()) {
+        DebugHelper::DebugPrint("루트 파라미터 태그를 찾을 수 없음: " + tag);
+        return UINT_MAX;
+    }
+    return it->second;
+} // GetParamIndex

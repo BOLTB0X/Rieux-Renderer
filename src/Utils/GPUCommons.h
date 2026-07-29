@@ -2,8 +2,56 @@
 #include <directxmath.h>
 #include "SharedCommons.h"
 
-namespace SharedCBs {
+namespace GPUCommons {
+    struct VertexData {
+        DirectX::XMFLOAT3 position;
+        DirectX::XMFLOAT2 texCoord;
+        DirectX::XMFLOAT3 normal;
+        DirectX::XMFLOAT3 tangent;
+        DirectX::XMFLOAT3 binormal;
+    }; // VertexData
 
+    struct GPUMaterialData {
+        DirectX::XMFLOAT4 albedoFactor;
+
+        float             metallicFactor;
+        float             roughnessFactor;
+        float             emissiveFactor;
+        float             alphaCutoff;
+
+        int               albedoTexIdx;
+        int               normalTexIdx;
+        int               metallicTexIdx;
+        int               roughnessTexIdx;
+
+        int               alphaTexIdx;
+        int               pad0;
+        int               pad1;
+        int               pad2;
+
+        GPUMaterialData()
+            : albedoFactor(SharedCommons::ALBEDO_FACTOR),
+            metallicFactor(SharedCommons::METALLIC_FACTOR),
+            roughnessFactor(SharedCommons::ROUGH_FACTOR),
+            emissiveFactor(SharedCommons::EMISS_FACTOR),
+            alphaCutoff(0.5f),
+            albedoTexIdx(-1), normalTexIdx(-1), metallicTexIdx(-1), roughnessTexIdx(-1),
+            alphaTexIdx(-1), pad0(0), pad1(0), pad2(0) {
+        }
+    }; // GPUMaterialData
+
+    struct GPUMeshData {
+        uint32_t vertexOffset;
+        uint32_t indexOffset;
+        uint32_t indexCount;
+        uint32_t materialIndex;
+
+        GPUMeshData() : vertexOffset(0), indexOffset(0), indexCount(0), materialIndex(0) {
+        }
+    }; // GPUMeshData
+} // struct
+
+namespace GPUCommons {
     __declspec(align(256)) struct MatrixCB {
         DirectX::XMMATRIX world;
         DirectX::XMMATRIX view;
@@ -79,4 +127,4 @@ namespace SharedCBs {
             padding3(0.0f, 0.0f, 0.0f, 0.0f) {
         }
     }; // DirectionalLightCB
-} // SharedCBs
+} // CBs
