@@ -1,8 +1,9 @@
 #pragma once
-#include <directxmath.h>
+#include <DirectXMath.h>
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 namespace SharedCommons {
     /////////////////////////////////////////
@@ -42,12 +43,12 @@ namespace SharedCommons {
 
 } // SharedCommons
 
+
 namespace SharedCommons {
     static constexpr DirectX::XMFLOAT3 LIGHT_DIR = { 0.0f, -1.0f, 0.0f };
-
     static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 1.0f, 0.98f, 0.96f, 1.0f };
-
     static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.15f, 0.15f, 0.15f, 1.0f };
+
 } // CB
 
 namespace SharedCommons {
@@ -57,19 +58,36 @@ namespace SharedCommons {
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
     static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";
     static const std::wstring SPONZA_FLAT_PS = L"HLSL/FlatSponzaPS.hlsl";
+
     static const std::string  CPU_SPONZA_VS_STR = "CPUSponzaVS";
     static const std::string  CPU_SPONZA_PS_STR = "CPUSponzaPS";
+
+    static const std::wstring GPU_PBR_VS = L"HLSL/GPU_PBRModelVS.hlsl";
+    static const std::wstring GPU_SPONZA_PS = L"HLSL/GPU_SponzaPS.hlsl";
+
+    static const std::string  GPU_SPONZA_VS_STR = "GPUSponzaVS";
+    static const std::string  GPU_SPONZA_PS_STR = "GPUSponzaPS";
 } // HLSL
 
 namespace SharedCommons {
-    static const std::string  KEY_STATIC_SPONZA = "CPUSponza";
-
     static const std::string  KEY_DUMMEY_WHITE = "DummeyWhite";
     static const std::string  KEY_DUMMEY_NORMAL = "DummeyNORMAL";
-    static const std::string  KEY_SPONZA_SOLID_CULL = "CPUSponza_SOLID_CULL";
-    static const std::string  KEY_SPONZA_SOLID_NO_CULL = "CPUSponza_SOLID_NOCULL";
-    static const std::string  KEY_SPONZA_WIRE_CULL = "CPUSponza_WIRE_CULL";
-    static const std::string  KEY_SPONZA_WIRE_NO_CULL = "CPUSponza_WIRE_NOCULL";
+
+    static const std::string  KEY_CPU_SPONZA = "CPUSponza";
+    static const std::string  KEY_CPU_SPONZA_SIG = "CPUSponza_SIG";
+
+    static const std::string  KEY_CPU_SPONZA_SOLID_CULL = "CPUSponza_SOLID_CULL";
+    static const std::string  KEY_CPU_SPONZA_SOLID_NO_CULL = "CPUSponza_SOLID_NOCULL";
+    static const std::string  KEY_CPU_SPONZA_WIRE_CULL = "CPUSponza_WIRE_CULL";
+    static const std::string  KEY_CPU_SPONZA_WIRE_NO_CULL = "CPUSponza_WIRE_NOCULL";
+
+    static const std::string  KEY_GPU_SPONZA = "GPUSponza";
+    static const std::string  KEY_GPU_SPONZA_SIG = "GPUSponza_SIG";
+
+    static const std::string  KEY_GPU_SPONZA_SOLID_CULL = "GPUSponza_SOLID_CULL";
+    static const std::string  KEY_GPU_SPONZA_SOLID_NO_CULL = "GPUSponza_SOLID_NOCULL";
+    static const std::string  KEY_GPU_SPONZA_WIRE_CULL = "GPUSponza_WIRE_CULL";
+    static const std::string  KEY_GPU_SPONZA_WIRE_NO_CULL = "GPUSponza_WIRE_NOCULL";
 } // MAP - KEY
 
 namespace SharedCommons {
@@ -106,5 +124,25 @@ namespace SharedCommons {
     static constexpr float                    METALLIC_FACTOR = 0.0f;
     static constexpr float                    ROUGH_FACTOR = 0.8f;
     static constexpr float                    EMISS_FACTOR = 0.0f;
+    static constexpr float                    ALPHA_FACTOR = 0.5f;
 
 } // Assimp Tex
+
+namespace SharedCommons {
+
+    struct GPUMeshData {
+        uint32_t vertexOffset;
+        uint32_t indexOffset;
+        uint32_t indexCount;
+        uint32_t materialIndex;
+    }; // GPUMeshData
+
+    struct IndirectCommand {
+        uint32_t IndexCountPerInstance;
+        uint32_t InstanceCount;
+        uint32_t StartIndexLocation;
+        uint32_t BaseVertexLocation;
+        uint32_t StartInstanceLocation;
+    }; // IndirectCommand
+
+}; // 구조체

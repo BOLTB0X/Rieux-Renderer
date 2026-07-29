@@ -1,5 +1,6 @@
 #include "Pch.h"
 #include "PSOManager.h"
+#include "RendererState.h"
 // D3D12
 #include "d3dx12.h"
 // Uitls
@@ -11,28 +12,24 @@ using namespace Microsoft::WRL;
 
 PSOManager::PSOManager() {
     m_device = nullptr;
-    m_mainRootSignature = nullptr;
     m_rtvFormat = DXGI_FORMAT_UNKNOWN;
     m_dsvFormat = DXGI_FORMAT_UNKNOWN;
 } // PSOManager
 
 PSOManager::~PSOManager() {
     m_device = nullptr;
-    m_mainRootSignature = nullptr;
 } // ~PSOManager
 
 PSOManager::InitParams::InitParams()
-    : device(nullptr), mainRootSignature(nullptr),
-    rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM), dsvFormat(DXGI_FORMAT_D24_UNORM_S8_UINT) {
+    : device(nullptr), rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM), dsvFormat(DXGI_FORMAT_D24_UNORM_S8_UINT) {
 } // InitParams
 
 bool PSOManager::Init(const InitParams& params) {
     m_device = params.device;
-    m_mainRootSignature = params.mainRootSignature;
     m_rtvFormat = params.rtvFormat;
     m_dsvFormat = params.dsvFormat;
 
-    if (!BuildStaticSponzaPSO()) {
+    if (!BuildGPUDrivenPSO(SharedCommons::KEY_GPU_SPONZA_SIG)) {
         DebugHelper::DebugPrint("Sponza 메인 PSO 빌드 실패");
         return false;
     }
@@ -53,7 +50,62 @@ D3D12PipelineState* PSOManager::GetPSO(const std::string& name) const {
     return nullptr;
 } // GetPSO
 
-bool PSOManager::BuildStaticSponzaPSO() {
+
+ID3D12RootSignature* PSOManager::GetRootSignature(const std::string& name) const {
+    auto it = m_rootSignatureMap.find(name);
+    return (it != m_rootSignatureMap.end()) ? it->second->GetRootSignature() : nullptr;
+} // GetRootSignature
+
+bool PSOManager::CreateRootSignature(const std::string& name, const std::function<void(D3D12RootSignature::Builder&)>& configure) {
+    D3D12RootSignature::InitParams params;
+    params.device = m_device;
+    configure(params.builder);
+
+    auto rootSig = std::make_unique<D3D12RootSignature>();
+    if (!rootSig->Init(params)) {
+        DebugHelper::DebugPrint("루트 시그니처 생성 실패: " + name);
+        return false;
+    }
+
+    m_rootSignatureMap[name] = std::move(rootSig);
+    return true;
+} // CreateRootSignature
+
+UINT PSOManager::GetRootParamIndex(const std::string& signatureName, const std::string& tag) const {
+    auto it = m_rootSignatureMap.find(signatureName);
+    if (it == m_rootSignatureMap.end()) {
+        DebugHelper::DebugPrint("루트 시그니처를 찾을 수 없음: " + signatureName);
+        return UINT_MAX;
+    }
+    return it->second->GetParamIndex(tag);
+} // GetRootParamIndex
+
+bool PSOManager::BuildDefaultSponzaPSO(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
+            .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)
+            .AddConstants("World", 2, 16, D3D12_SHADER_VISIBILITY_VERTEX)
+            .AddSRVTable("Albedo", 0, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddSRVTable("Normal", 1, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddSRVTable("Alpha", 2, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddStaticSampler(RendererState::StaticSamplerIndex);
+    })) {
+        return false;
+    }
+
+    RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
+    RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
+    RendererState::WorldIndex = GetRootParamIndex(signatureKey, "World");
+    RendererState::Tex0Index = GetRootParamIndex(signatureKey, "Albedo");
+    RendererState::Tex1Index = GetRootParamIndex(signatureKey, "Normal");
+    RendererState::Tex2Index = GetRootParamIndex(signatureKey, "Alpha");
+
+    ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패: " + signatureKey);
+        return false;
+    }
+
     ComPtr<IDxcBlob> vsBlob;
     ComPtr<IDxcBlob> psBlob;
 
@@ -75,7 +127,7 @@ bool PSOManager::BuildStaticSponzaPSO() {
 
     D3D12PipelineState::InitParams baseParams;
     baseParams.device = m_device;
-    baseParams.rootSignature = m_mainRootSignature;
+    baseParams.rootSignature = rootSignature;
     baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
     baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
     baseParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
@@ -83,24 +135,99 @@ bool PSOManager::BuildStaticSponzaPSO() {
     baseParams.rtvFormats[0] = m_rtvFormat;
     baseParams.dsvFormat = m_dsvFormat;
     baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    // 버퍼 공통 설정 
     baseParams.depthStencilState.DepthEnable = TRUE;
     baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
 
     bool result = true;
 
-    result &= BuildSolidCullBack(SharedCommons::KEY_SPONZA_SOLID_CULL, baseParams);
-    result &= BuildSolidCullNone(SharedCommons::KEY_SPONZA_SOLID_NO_CULL, baseParams);
-    result &= BuildWireframeCullBack(SharedCommons::KEY_SPONZA_WIRE_CULL, baseParams);
-    result &= BuildWireframeCullNone(SharedCommons::KEY_SPONZA_WIRE_NO_CULL, baseParams);
+    result &= BuildSolidCullBack(SharedCommons::KEY_CPU_SPONZA_SOLID_CULL, baseParams);
+    result &= BuildSolidCullNone(SharedCommons::KEY_CPU_SPONZA_SOLID_NO_CULL, baseParams);
+    result &= BuildWireframeCullBack(SharedCommons::KEY_CPU_SPONZA_WIRE_CULL, baseParams);
+    result &= BuildWireframeCullNone(SharedCommons::KEY_CPU_SPONZA_WIRE_NO_CULL, baseParams);
 
     if (!result) {
         DebugHelper::DebugPrint("CPUSponza PSO 변형 초기화 실패");
     }
 
     return result;
-} // BuildStaticSponzaPSO
+} // BuildDefaultSponzaPSO
+
+bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
+            .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)
+            .AddConstants("World", 2, 16, D3D12_SHADER_VISIBILITY_VERTEX)
+            .AddConstants("MaterialIndices", 3, 4, D3D12_SHADER_VISIBILITY_PIXEL) 
+            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1) // t0, space1, unbounded
+            .AddStaticSampler(RendererState::StaticSamplerIndex);
+        })) {
+        return false;
+    }
+
+    RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
+    RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
+    RendererState::WorldIndex = GetRootParamIndex(signatureKey, "World");
+    RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
+    RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
+
+    ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
+    if (!rootSignature) {
+        return false;
+    }
+
+    //RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
+    //RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
+
+    //DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
+    //DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
+
+    ComPtr<IDxcBlob> vsBlob;
+    ComPtr<IDxcBlob> psBlob;
+
+    if (!ShaderHelper::InitVertexShader(SharedCommons::PBR_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::GPU_SPONZA_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::GPU_SPONZA_VS_STR] = vsBlob;
+    m_shaderBlobs[SharedCommons::GPU_SPONZA_PS_STR] = psBlob;
+
+    std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+    };
+
+    D3D12PipelineState::InitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = m_rtvFormat;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    baseParams.depthStencilState.DepthEnable = TRUE;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+
+    bool result = true;
+
+    result &= BuildSolidCullBack(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL, baseParams);
+    result &= BuildSolidCullNone(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL, baseParams);
+    result &= BuildWireframeCullBack(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL, baseParams);
+    result &= BuildWireframeCullNone(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL, baseParams);
+
+    if (!result) {
+        DebugHelper::DebugPrint("CPUSponza PSO 변형 초기화 실패");
+    }
+
+    return result;
+} // BuildGPUDrivenPSO
 
 bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::InitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;

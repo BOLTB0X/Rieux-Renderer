@@ -51,7 +51,7 @@ bool D3D12PipelineState::Init(const InitParams& params) {
     psoDesc.SampleDesc.Count = 1;
     psoDesc.SampleDesc.Quality = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    ComPtr<ID3D12PipelineState> pso;
     HRESULT hr = params.device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
     if (FAILED(hr)) {
         return false;

@@ -19,11 +19,11 @@
 #include "DirectionalLight.h"
 #include "GPUMonitor.h"
 // World
-#include "World/CPUSponza.h"
+#include "World/Sponza.h"
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
-#include "SharedCBs.h"
+#include "GPUCommons.h"
 #include "FunctionWidget.h"
 
 using namespace DebugHelper;
@@ -31,11 +31,10 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 Renderer::Renderer()
-    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{}, m_enableWireframe(false), m_enableCulling(true) {
+    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{} {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
-    m_RootSignature = std::make_unique<D3D12RootSignature>();
     m_SceneRenderTarget = std::make_unique<RenderTarget>();
 
     // 컴포넌트 및 매니저 객체 생성
@@ -48,7 +47,7 @@ Renderer::Renderer()
 
     m_RenderTextureManager = std::make_unique<RenderTextureManager>();
     m_PSOManager = std::make_shared<PSOManager>();
-    m_Sponza = std::make_unique<CPUSponza>();
+    m_Sponza = std::make_unique<Sponza>();
 } // Renderer
 
 Renderer::~Renderer() {
@@ -84,15 +83,14 @@ void Renderer::Shutdown() {
         m_CommandQueue->WaitForPreviousFrame();
     }
 
-    // 2. LoadGUIs 역순 해제
+    // LoadGUIs 역순 해제
     // (UI 리소스 및 렌더 타겟 참조 해제)
     m_ImGuiManager.reset();
 
-    // 3. LoadAssets 역순 해제
+    // LoadAssets 역순 해제
     m_Sponza.reset();
     m_TextureManager.reset();
     m_PSOManager.reset();
-    m_RootSignature.reset();
 
     // LoadSceneRenderTarget 역순 해제
     m_SceneRenderTarget.reset();
@@ -243,14 +241,8 @@ bool Renderer::LoadAssets(HWND hwnd) {
     D3D12RootSignature::InitParams rootSigParams;
     rootSigParams.device = m_D3D12Device->GetDevice();
 
-    if (!m_RootSignature->Init(rootSigParams)) {
-        DebugHelper::DebugPrint("루트 시그니처 초기화 실패");
-        return false;
-    }
-
     PSOManager::InitParams psoInitParams;
     psoInitParams.device = m_D3D12Device->GetDevice();
-    psoInitParams.mainRootSignature = m_RootSignature->GetRootSignature();
     psoInitParams.rtvFormat = RendererState::RTVFormat;
     psoInitParams.dsvFormat = DXGI_FORMAT_D32_FLOAT;
 
@@ -270,19 +262,18 @@ bool Renderer::LoadAssets(HWND hwnd) {
         return false;
     }
 
-    CPUSponza::InitParams sponzaInitParams;
+    Sponza::InitParams sponzaInitParams;
     sponzaInitParams.device = m_D3D12Device->GetDevice();
     sponzaInitParams.commandQueue = m_CommandQueue->GetQueue();
-    sponzaInitParams.rootSig = m_RootSignature->GetRootSignature();
     sponzaInitParams.textureManager = m_TextureManager;
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
-    sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_SOLID_CULL)->GetPSO();
-    sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_SOLID_NO_CULL)->GetPSO();
-    sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_WIRE_CULL)->GetPSO();
-    sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_SPONZA_WIRE_NO_CULL)->GetPSO();
+    sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL)->GetPSO();
+    sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL)->GetPSO();
+    sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_Sponza->Init(sponzaInitParams)) {
-        DebugHelper::DebugPrint("CPUSponza 모델 초기화 실패");
+        DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
         return false;
     }
 
@@ -330,8 +321,8 @@ bool Renderer::InitCommonCBs() {
     m_DirectionalLight->Init();
 
     CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
-    const UINT frameCBSize = (sizeof(SharedCBs::FrameCB) + 255) & ~255;
-    const UINT lightCBSize = (sizeof(SharedCBs::DirectionalLightCB) + 255) & ~255;
+    const UINT frameCBSize = (sizeof(GPUCommons::FrameCB) + 255) & ~255;
+    const UINT lightCBSize = (sizeof(GPUCommons::DirectionalLightCB) + 255) & ~255;
 
     // FrameCB 리소스 생성 및 맵핑
     CD3DX12_RESOURCE_DESC frameCBDesc = CD3DX12_RESOURCE_DESC::Buffer(frameCBSize);
@@ -353,21 +344,21 @@ void Renderer::UpdateCommonCBs() {
     m_Camera->Update();
     m_DirectionalLight->Update();
 
-    SharedCBs::FrameCB frameData;
+    GPUCommons::FrameCB frameData;
     frameData.view = XMMatrixTranspose(m_Camera->GetViewMatrix());
     frameData.projection = XMMatrixTranspose(m_Camera->GetProjectionMatrix());
     frameData.cameraPosition = m_Camera->GetPosition();
     frameData.cameraFov = m_Camera->GetFov();
-    memcpy(m_mappedFrameCB, &frameData, sizeof(SharedCBs::FrameCB));
+    memcpy(m_mappedFrameCB, &frameData, sizeof(GPUCommons::FrameCB));
 
-    SharedCBs::DirectionalLightCB lightData;
+    GPUCommons::DirectionalLightCB lightData;
     lightData.direction = m_DirectionalLight->GetDirection();
     lightData.ambient = m_DirectionalLight->GetAmbient();
     lightData.diffuse = m_DirectionalLight->GetDiffuse();
     lightData.lookAt = m_DirectionalLight->GetLookAt();
     lightData.lightViewMatrix = XMMatrixTranspose(m_DirectionalLight->GetViewMatrix());
     lightData.lightProjectionMatrix = XMMatrixTranspose(m_DirectionalLight->GetProjection());
-    memcpy(m_mappedLightCB, &lightData, sizeof(SharedCBs::DirectionalLightCB));
+    memcpy(m_mappedLightCB, &lightData, sizeof(GPUCommons::DirectionalLightCB));
 } // UpdateCommonCBs
 
 void Renderer::ShutdownCommonCBs() {
@@ -385,14 +376,14 @@ void Renderer::PopulateCommandList() {
     m_CommandQueue->Reset();
     ID3D12GraphicsCommandList* cmdList = m_CommandQueue->GetList();
 
-    cmdList->SetGraphicsRootSignature(m_RootSignature->GetRootSignature());
-
+    cmdList->SetGraphicsRootSignature(m_PSOManager->GetRootSignature(SharedCommons::KEY_GPU_SPONZA_SIG));
     ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
     // CBV 바인딩
     cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_frameCB->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_lightCB->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0)); // 추가
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
@@ -403,7 +394,6 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     m_GPUMonitor->RecordTimestamp(cmdList, 0);
-
 
     // 스폰자 씬 렌더링
     m_RenderQueue->Clear();

@@ -37,12 +37,11 @@ public:
 
     struct InitParams {
         ID3D12Device*                   device;
-        ID3D12RootSignature*            rootSig;
         ID3D12CommandQueue*             commandQueue;
         std::shared_ptr<TextureManager> textureManager;
         std::string                     path;
 
-        InitParams() : device(nullptr), rootSig(nullptr), commandQueue(nullptr), textureManager(nullptr), path("") {
+        InitParams() : device(nullptr), commandQueue(nullptr), textureManager(nullptr), path("") {
         }
     }; // InitParams
 

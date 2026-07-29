@@ -1,5 +1,5 @@
 #include "Pch.h"
-#include "CPUSponza.h"
+#include "Sponza.h"
 // Core
 #include "RendererState.h"
 // Components
@@ -18,7 +18,7 @@
 using namespace Microsoft::WRL;
 using namespace DirectX;
 
-CPUSponza::CPUSponza() : AssimpModel(), m_enableWireframe(false) {
+Sponza::Sponza() : AssimpModel(), m_enableWireframe(false) {
     m_worldMatrix = XMMatrixIdentity();
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
@@ -27,23 +27,23 @@ CPUSponza::CPUSponza() : AssimpModel(), m_enableWireframe(false) {
     m_heapAllocator = nullptr;
 } // StaticModel
 
-CPUSponza::~CPUSponza() {
+Sponza::~Sponza() {
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
     m_psoWireCull = nullptr;
     m_psoWireNoCull = nullptr;
     m_heapAllocator = nullptr;
-} // ~CPUSponza
+} // ~Sponza
 
-bool CPUSponza::Init(const InitParams& params) {
+bool Sponza::Init(const InitParams& params) {
     if (!AssimpModel::Init(params)) {
-        DebugHelper::DebugPrint("CPUSponza 모델 로드 실패");
+        DebugHelper::DebugPrint("Sponza 모델 로드 실패");
         return false;
     }
 
     if (!params.psoSolidCull || !params.psoSolidNoCull ||
         !params.psoWireCull || !params.psoWireNoCull || !params.heapAllocator) {
-        DebugHelper::DebugPrint("CPUSponza 초기화 실패");
+        DebugHelper::DebugPrint("Sponza 초기화 실패");
         return false;
     }
 
@@ -55,10 +55,14 @@ bool CPUSponza::Init(const InitParams& params) {
     return true;
 } // Init
 
-void CPUSponza::Submit(RenderQueue* renderQueue) {
+void Sponza::Submit(RenderQueue* renderQueue) {
     if (!renderQueue) {
         return;
     }
+
+    DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
+    DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
+
 
     for (const auto& mesh : m_meshes) {
         if (!mesh) {
@@ -102,18 +106,25 @@ void CPUSponza::Submit(RenderQueue* renderQueue) {
             if (materialIndex < m_materials.size()) {
                 const auto& material = m_materials[materialIndex];
 
-                if (material.albedo) {
-                    UINT idx = material.albedo->GetSRVIndex();
-                    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex0Index, m_heapAllocator->GetGPUHandle(idx));
-                }
-                if (material.normal) {
-                    UINT idx = material.normal->GetSRVIndex();
-                    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex1Index, m_heapAllocator->GetGPUHandle(idx));
-                }
-                if (material.alpha) {
-                    UINT idx = material.alpha->GetSRVIndex();
-                    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex2Index, m_heapAllocator->GetGPUHandle(idx));
-                }
+                //if (material.albedo) {
+                //    UINT idx = material.albedo->GetSRVIndex();
+                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex0Index, m_heapAllocator->GetGPUHandle(idx));
+                //}
+                //if (material.normal) {
+                //    UINT idx = material.normal->GetSRVIndex();
+                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex1Index, m_heapAllocator->GetGPUHandle(idx));
+                //}
+                //if (material.alpha) {
+                //    UINT idx = material.alpha->GetSRVIndex();
+                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex2Index, m_heapAllocator->GetGPUHandle(idx));
+                //}
+                UINT matIndices[4] = {
+                    material.albedo->GetSRVIndex(),
+                    material.normal->GetSRVIndex(),
+                    material.alpha->GetSRVIndex(),
+                    0 // padding
+                };
+                cmdList->SetGraphicsRoot32BitConstants(RendererState::MaterialIndicesIndex, 4, matIndices, 0);
             } // if (materialIndex < m_materials.size())
 
             meshPtr->Render(cmdList);
@@ -123,12 +134,12 @@ void CPUSponza::Submit(RenderQueue* renderQueue) {
     } // for (const auto& mesh : m_meshes)
 } // Submit
 
-const DirectX::XMMATRIX& CPUSponza::GetWorldMatrix() const {
+const DirectX::XMMATRIX& Sponza::GetWorldMatrix() const {
     return m_worldMatrix;
 } // GetWorldMatrix
 
-void CPUSponza::OnGUI() {
-    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ CPUSponza Options ]");
+void Sponza::OnGUI() {
+    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Sponza Options ]");
     ImGui::Checkbox("Wireframe Mode", &m_enableWireframe);
 
     ImGui::Separator();

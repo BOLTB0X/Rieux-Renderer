@@ -19,9 +19,15 @@ UINT RendererState::WorldIndex = 2;
 UINT RendererState::Tex0Index = 3;
 UINT RendererState::Tex1Index = 4;
 UINT RendererState::Tex2Index = 5;
+UINT RendererState::MeshDataIndex = 3;
+UINT RendererState::MaterialIndicesIndex = 5;
+UINT RendererState::BindlessTexIndex = 6;
+
 UINT RendererState::SharedHeapCapacity = 1024;
 
 UINT RendererState::RTVCapacity = 64;
 UINT RendererState::DSVCapacity = 16;
+
+UINT RendererState::StaticSamplerIndex = 0;
 
 DXGI_FORMAT RendererState::RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;

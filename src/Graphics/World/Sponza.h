@@ -8,18 +8,18 @@
 class RenderQueue;
 class DescriptorHeapAllocator;
 
-class CPUSponza : public AssimpModel {
+class Sponza : public AssimpModel {
 public:
     struct InitParams : public AssimpModel::InitParams {
-        ID3D12PipelineState* psoSolidCull = nullptr;
-        ID3D12PipelineState* psoSolidNoCull = nullptr;
-        ID3D12PipelineState* psoWireCull = nullptr;
-        ID3D12PipelineState* psoWireNoCull = nullptr;
+        ID3D12PipelineState*     psoSolidCull = nullptr;
+        ID3D12PipelineState*     psoSolidNoCull = nullptr;
+        ID3D12PipelineState*     psoWireCull = nullptr;
+        ID3D12PipelineState*     psoWireNoCull = nullptr;
         DescriptorHeapAllocator* heapAllocator = nullptr;
     }; // InitParams
 
-    CPUSponza();
-    virtual ~CPUSponza();
+    Sponza();
+    virtual ~Sponza();
 
     bool                     Init(const InitParams&);
     void                     Submit(RenderQueue*);
@@ -35,4 +35,4 @@ private:
     ID3D12PipelineState*      m_psoWireNoCull;
     DescriptorHeapAllocator*  m_heapAllocator;
     bool                      m_enableWireframe;
-}; // CPUSponza
+}; // Sponza

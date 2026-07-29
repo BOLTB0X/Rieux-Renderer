@@ -23,7 +23,7 @@ Camera::Camera()
     m_forward = MathHelper::FRONT;
     m_right = DirectX::XMVector3Cross(m_forward, MathHelper::UP);
     m_upVector = DirectX::XMVector3Cross(m_right, m_forward);
-    m_rotationSpeed = 1.0f;
+    m_rotationSpeed = 0.5f;
     m_moveSpeed = 1.0;
     m_zoomSpeed = 1.0;
 } //Camera

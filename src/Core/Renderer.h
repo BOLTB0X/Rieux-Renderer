@@ -26,7 +26,7 @@ class TextureManager;
 class DescriptorHeapAllocator;
 class ImGuiManager;
 class RenderTextureManager;
-class CPUSponza;
+class Sponza;
 
 class Renderer {
 public:
@@ -91,10 +91,10 @@ private:
     std::unique_ptr<D3D12Device>             m_D3D12Device;
     std::unique_ptr<CommandQueue>            m_CommandQueue;
     std::unique_ptr<D3D12SwapChain>          m_SwapChain;
-    std::unique_ptr<D3D12RootSignature>      m_RootSignature;
     std::unique_ptr<DescriptorHeapAllocator> m_sharedDescriptorAllocator;
     std::unique_ptr<RenderTextureManager>    m_RenderTextureManager;
     std::unique_ptr<RenderTarget>            m_SceneRenderTarget;
+    std::shared_ptr<PSOManager>              m_PSOManager;
     // --------------------------------------------------
     // 공용 데이터
     // --------------------------------------------------
@@ -103,7 +103,6 @@ private:
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;
-    std::shared_ptr<PSOManager>              m_PSOManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
     Microsoft::WRL::ComPtr<ID3D12Resource>   m_frameCB;
     Microsoft::WRL::ComPtr<ID3D12Resource>   m_lightCB;
@@ -113,7 +112,5 @@ private:
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------
-    std::unique_ptr<CPUSponza>               m_Sponza;
-    bool                                     m_enableWireframe;
-    bool                                     m_enableCulling;
+    std::unique_ptr<Sponza>               m_Sponza;
 }; // Renderer

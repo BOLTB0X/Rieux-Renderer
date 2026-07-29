@@ -23,9 +23,15 @@ public: // 프레임 및 디스크립터
     static UINT Tex0Index;
     static UINT Tex1Index;
     static UINT Tex2Index;
+    static UINT StaticSamplerIndex;
+
+    static UINT MeshDataIndex;
+    static UINT MaterialIndicesIndex;
+    static UINT BindlessTexIndex;
+
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
-    static UINT DSVCapacity;;
+    static UINT DSVCapacity;
 
 public:
     static DXGI_FORMAT RTVFormat;
