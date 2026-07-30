@@ -158,8 +158,10 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
         b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
             .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)
             .AddConstants("World", 2, 16, D3D12_SHADER_VISIBILITY_VERTEX)
-            .AddConstants("MaterialIndices", 3, 4, D3D12_SHADER_VISIBILITY_PIXEL) 
-            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1) // t0, space1, unbounded
+            .AddConstants("VertexBufferIndex", 3, 4, D3D12_SHADER_VISIBILITY_VERTEX)
+            .AddConstants("MaterialIndices", 4, 4, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1)     // t0, space1
+            .AddSRVTable("BindlessBuffers", 0, D3D12_SHADER_VISIBILITY_VERTEX, -1, 2)     // t0, space2
             .AddStaticSampler(RendererState::StaticSamplerIndex);
         })) {
         return false;
@@ -168,24 +170,20 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
     RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
     RendererState::WorldIndex = GetRootParamIndex(signatureKey, "World");
+    RendererState::VertexBufferIndexParam = GetRootParamIndex(signatureKey, "VertexBufferIndex");
     RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
     RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
+    RendererState::BindlessBufIndex = GetRootParamIndex(signatureKey, "BindlessBuffers");
 
     ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
     if (!rootSignature) {
         return false;
     }
 
-    //RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
-    //RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
-
-    //DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
-    //DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
-
     ComPtr<IDxcBlob> vsBlob;
     ComPtr<IDxcBlob> psBlob;
 
-    if (!ShaderHelper::InitVertexShader(SharedCommons::PBR_VS, vsBlob.GetAddressOf()) ||
+    if (!ShaderHelper::InitVertexShader(SharedCommons::GPU_PBR_VS, vsBlob.GetAddressOf()) ||
         !ShaderHelper::InitPixelShader(SharedCommons::GPU_SPONZA_PS, psBlob.GetAddressOf())) {
         return false;
     }
@@ -206,7 +204,7 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     baseParams.rootSignature = rootSignature;
     baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
     baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
-    baseParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
+    baseParams.inputLayout = { nullptr, 0 };
     baseParams.numRenderTargets = 1;
     baseParams.rtvFormats[0] = m_rtvFormat;
     baseParams.dsvFormat = m_dsvFormat;

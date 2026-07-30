@@ -3,7 +3,6 @@
 // Untils
 #include "SharedCommons.h"
 
-
 bool  RendererState::FullScrren = SharedCommons::FULL_SCREEN;
 bool  RendererState::VsyncEnable = SharedCommons::VSYNC_ENABLED;
 int   RendererState::ScreenWidth = SharedCommons::SCREEN_WIDTH;
@@ -20,8 +19,10 @@ UINT RendererState::Tex0Index = 3;
 UINT RendererState::Tex1Index = 4;
 UINT RendererState::Tex2Index = 5;
 UINT RendererState::MeshDataIndex = 3;
-UINT RendererState::MaterialIndicesIndex = 5;
+UINT RendererState::MaterialIndicesIndex = 4;
+UINT RendererState::VertexBufferIndexParam = 5;
 UINT RendererState::BindlessTexIndex = 6;
+UINT RendererState::BindlessBufIndex = 7;
 
 UINT RendererState::SharedHeapCapacity = 1024;
 

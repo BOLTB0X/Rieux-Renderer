@@ -1,7 +1,11 @@
 #include "Pch.h"
 #include "AssimpLoader.h"
-#include "Data/Texture.h"
-#include "Managers/TextureManager.h"
+// Data
+#include "Texture.h"
+// Components
+#include "DescriptorHeapAllocator.h"
+// Managers
+#include "TextureManager.h"
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
@@ -13,7 +17,7 @@ using namespace DirectX;
 using namespace Microsoft::WRL;
 
 AssimpLoader::AssimpLoader(std::shared_ptr<TextureManager> texMgr)
-    : m_TextureManager(texMgr), m_device(nullptr), m_uploadFenceEvent(nullptr), m_uploadFenceValue(0) {
+    : m_TextureManager(texMgr), m_device(nullptr), m_heapAllocator(nullptr), m_uploadFenceEvent(nullptr), m_uploadFenceValue(0) {
 } // AssimpLoader
 
 AssimpLoader::~AssimpLoader() {
@@ -21,6 +25,7 @@ AssimpLoader::~AssimpLoader() {
         CloseHandle(m_uploadFenceEvent);
         m_uploadFenceEvent = nullptr;
     }
+    m_heapAllocator = nullptr;
     m_device = nullptr;
 } // ~AssimpLoader
 
@@ -31,6 +36,7 @@ bool AssimpLoader::LoadMeshModel(const LoadParams& params) {
     }
 
     m_device = params.device;
+    m_heapAllocator = params.heapAllocator;
     m_commandQueue = params.commandQueue;
 
     if (FAILED(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_uploadAllocator)))) {
@@ -171,6 +177,7 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
     meshParams.vertices = &vertices;
     meshParams.indices = &indices;
     meshParams.materialIndex = mesh->mMaterialIndex;
+    meshParams.heapAllocator = m_heapAllocator;
     meshParams.name = mesh->mName.C_Str();
 
     ComPtr<ID3D12Resource> vbUpload;

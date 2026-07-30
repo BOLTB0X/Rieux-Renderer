@@ -14,7 +14,7 @@ struct PS_IN
 Texture2D    g_Textures[] : register(t0, space1);
 SamplerState Sampler : register(s0);
 
-cbuffer MaterialIndicesCB : register(b3)
+cbuffer MaterialIndicesCB : register(b4)
 {
     uint AlbedoIndex;
     uint NormalIndex;

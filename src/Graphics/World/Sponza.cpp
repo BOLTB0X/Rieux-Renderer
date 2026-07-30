@@ -36,6 +36,8 @@ Sponza::~Sponza() {
 } // ~Sponza
 
 bool Sponza::Init(const InitParams& params) {
+    m_heapAllocator = params.heapAllocator;
+
     if (!AssimpModel::Init(params)) {
         DebugHelper::DebugPrint("Sponza 모델 로드 실패");
         return false;
@@ -51,7 +53,6 @@ bool Sponza::Init(const InitParams& params) {
     m_psoSolidNoCull = params.psoSolidNoCull;
     m_psoWireCull = params.psoWireCull;
     m_psoWireNoCull = params.psoWireNoCull;
-    m_heapAllocator = params.heapAllocator;
     return true;
 } // Init
 
@@ -60,10 +61,8 @@ void Sponza::Submit(RenderQueue* renderQueue) {
         return;
     }
 
-    DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
-    DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
-
-
+    //DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
+    //DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
     for (const auto& mesh : m_meshes) {
         if (!mesh) {
             continue;
@@ -71,7 +70,6 @@ void Sponza::Submit(RenderQueue* renderQueue) {
 
         bool isVase = false;
         std::string meshName = mesh->GetName();
-
         //OutputDebugStringA(("Mesh Name: " + meshName + "\n").c_str());
 
         if (meshName.find("vase") != std::string::npos ||
@@ -102,22 +100,13 @@ void Sponza::Submit(RenderQueue* renderQueue) {
                 0
             );
 
+            UINT vbIndex = meshPtr->GetVertexBufferSRVIndex();
+            cmdList->SetGraphicsRoot32BitConstants(RendererState::VertexBufferIndexParam, 1, &vbIndex, 0);
+
             unsigned int materialIndex = meshPtr->GetMaterialIndex();
             if (materialIndex < m_materials.size()) {
                 const auto& material = m_materials[materialIndex];
 
-                //if (material.albedo) {
-                //    UINT idx = material.albedo->GetSRVIndex();
-                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex0Index, m_heapAllocator->GetGPUHandle(idx));
-                //}
-                //if (material.normal) {
-                //    UINT idx = material.normal->GetSRVIndex();
-                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex1Index, m_heapAllocator->GetGPUHandle(idx));
-                //}
-                //if (material.alpha) {
-                //    UINT idx = material.alpha->GetSRVIndex();
-                //    if (idx != UINT_MAX) cmdList->SetGraphicsRootDescriptorTable(RendererState::Tex2Index, m_heapAllocator->GetGPUHandle(idx));
-                //}
                 UINT matIndices[4] = {
                     material.albedo->GetSRVIndex(),
                     material.normal->GetSRVIndex(),

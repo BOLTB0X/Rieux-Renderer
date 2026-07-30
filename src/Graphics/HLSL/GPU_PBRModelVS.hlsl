@@ -1,58 +1,56 @@
 // GPU_PBRModelVS.hlsl
 #include "Commons.hlsli"
 
-struct VertexData
+struct PBRVertex
 {
-    float3 Position;
-    float2 TexCoord;
-    float3 Normal;
-    float3 Tangent;
-    float3 Binormal;
-}; // VertexData
+    float3 position;
+    float2 texcoord;
+    float3 normal;
+    float3 tangent;
+    float3 binormal;
+}; //
 
-struct GPUMeshData
+StructuredBuffer<PBRVertex> g_VertexBuffers[] : register(t0, space2);
+
+cbuffer WorldCB : register(b2)
 {
-    uint vertexOffset;
-    uint indexOffset;
-    uint indexCount;
-    uint materialIndex;
-}; // GPUMeshData
-
-StructuredBuffer<GPUMeshData> g_MeshDatas : register(t0, space0);
-StructuredBuffer<VertexData> g_Vertices : register(t1, space0);
-
-cbuffer WorldCB : register(b2, space0)
-{
-    matrix g_world;
+    matrix wWorld;
 }; // WorldCB
 
-#define WORLD g_world
+#define WORLD wWorld
+
+cbuffer VertexBufferIndexCB : register(b3)
+{
+    uint vVertexBufferIndex;
+}; // VertexBufferIndexCB
+
+#define VERTEX_BUFFER_INDEX vVertexBufferIndex
 
 struct VS_OUT
 {
-    float4 pos : SV_POSITION;
-    float2 uv : TEXCOORD;
-    float3 normal : NORMAL;
-    uint   instID : INSTANCE_ID;
+    float4 positionCS : SV_POSITION;
+    float3 positionWS : POSITION_WS;
+    float3 normalWS : NORMAL_WS;
+    float3 tangentWS : TANGENT_WS;
+    float3 binormalWS : BINORMAL_WS;
+    float2 texcoord : TEXCOORD;
 }; // VS_OUT
 
-// 수동 Fetch Vertex Shader
-VS_OUT main(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
+VS_OUT main(uint vertexID : SV_VertexID)
 {
+    PBRVertex input = g_VertexBuffers[VERTEX_BUFFER_INDEX][vertexID];
+
     VS_OUT output;
+    float4 worldPos = mul(float4(input.position, 1.0f), WORLD);
+    output.positionWS = worldPos.xyz;
 
-    GPUMeshData meshInfo = g_MeshDatas[instanceID];
-
-    uint globalVertexIdx = meshInfo.vertexOffset + vertexID;
-    VertexData v = g_Vertices[globalVertexIdx];
-
-    float4 worldPos = mul(float4(v.Position, 1.0f), WORLD);
     float4 viewPos = mul(worldPos, VIEW);
-    output.pos = mul(viewPos, PROJ);
-    
-    output.uv = v.TexCoord;
-    output.normal = mul(v.Normal, (float3x3) WORLD);
-    output.instID = instanceID;
+    output.positionCS = mul(viewPos, PROJ);
+
+    output.normalWS = normalize(mul(input.normal, (float3x3) WORLD));
+    output.tangentWS = normalize(mul(input.tangent, (float3x3) WORLD));
+    output.binormalWS = normalize(mul(input.binormal, (float3x3) WORLD));
+    output.texcoord = input.texcoord;
 
     return output;
 } // main

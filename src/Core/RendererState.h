@@ -27,7 +27,9 @@ public: // 프레임 및 디스크립터
 
     static UINT MeshDataIndex;
     static UINT MaterialIndicesIndex;
+    static UINT VertexBufferIndexParam;
     static UINT BindlessTexIndex;
+    static UINT BindlessBufIndex;
 
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;

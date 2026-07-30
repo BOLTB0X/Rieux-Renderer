@@ -6,7 +6,6 @@
 #include <d3d12.h>
 
 class RenderQueue;
-class DescriptorHeapAllocator;
 
 class Sponza : public AssimpModel {
 public:
@@ -15,7 +14,6 @@ public:
         ID3D12PipelineState*     psoSolidNoCull = nullptr;
         ID3D12PipelineState*     psoWireCull = nullptr;
         ID3D12PipelineState*     psoWireNoCull = nullptr;
-        DescriptorHeapAllocator* heapAllocator = nullptr;
     }; // InitParams
 
     Sponza();

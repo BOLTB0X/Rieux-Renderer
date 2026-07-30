@@ -112,5 +112,5 @@ private:
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------
-    std::unique_ptr<Sponza>               m_Sponza;
+    std::unique_ptr<Sponza>                  m_Sponza;
 }; // Renderer

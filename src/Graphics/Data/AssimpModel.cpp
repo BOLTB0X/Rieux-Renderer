@@ -22,6 +22,7 @@ bool AssimpModel::Init(const InitParams& params) {
     loadParams.commandQueue = params.commandQueue;
     loadParams.path = params.path;
     loadParams.outModel = this;
+    loadParams.heapAllocator = params.heapAllocator;
 
     return m_AssimpLoader->LoadMeshModel(loadParams);
 } // Init

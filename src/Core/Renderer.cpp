@@ -267,11 +267,11 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.commandQueue = m_CommandQueue->GetQueue();
     sponzaInitParams.textureManager = m_TextureManager;
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
+    sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL)->GetPSO();
     sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL)->GetPSO();
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
-    sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
         return false;
@@ -383,7 +383,8 @@ void Renderer::PopulateCommandList() {
     // CBV 바인딩
     cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_frameCB->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_lightCB->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0)); // 추가
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
