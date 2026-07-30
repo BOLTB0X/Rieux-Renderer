@@ -191,14 +191,6 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::GPU_SPONZA_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::GPU_SPONZA_PS_STR] = psBlob;
 
-    std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
     D3D12PipelineState::InitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;
