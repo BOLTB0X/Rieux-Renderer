@@ -8,8 +8,6 @@
 #include <DirectXMath.h>
 #include <string>
 #include <memory>
-#include "RendererState.h"
-
 
 class D3D12Device;
 class CommandQueue;
@@ -27,6 +25,7 @@ class DescriptorHeapAllocator;
 class ImGuiManager;
 class RenderTextureManager;
 class Sponza;
+class RendererState;
 
 class Renderer {
 public:
@@ -76,10 +75,6 @@ private:
     bool LoadGUIs(HWND, std::shared_ptr<ImGuiManager>);
 
 private:
-    bool InitCommonCBs();
-    void UpdateCommonCBs();
-    void ShutdownCommonCBs();
-
     void PopulateCommandList();
 
     void OnGUI();
@@ -98,16 +93,13 @@ private:
     // --------------------------------------------------
     // 공용 데이터
     // --------------------------------------------------
+    std::unique_ptr<RendererState>           m_RendererState;
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_Camera;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
-    Microsoft::WRL::ComPtr<ID3D12Resource>   m_frameCB;
-    Microsoft::WRL::ComPtr<ID3D12Resource>   m_lightCB;
-    UINT8*                                   m_mappedFrameCB;
-    UINT8*                                   m_mappedLightCB;
     FrameParams                              m_currentFrameParams;
     // --------------------------------------------------
     // World 데이터

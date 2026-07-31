@@ -71,6 +71,8 @@ void Camera::Frame(float moveForward, float moveRight, float moveUp, float rotat
         float fovDelta = -zoomDelta * 0.05f;
         AddFOV(fovDelta * m_zoomSpeed);
     }
+
+    Update();
 } // Frame
 
 void Camera::Update() {

@@ -3,8 +3,13 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <dxcapi.h>
+#include <wrl.h>
+#include <DirectXMath.h>
+// Utils
+#include "GPUCommons.h"
 
 class RendererState {
+// Global 상수
 public: // Screen
     static bool  FullScrren;
     static bool  VsyncEnable;
@@ -14,7 +19,6 @@ public: // Screen
     static float ScreenNear;
     static float aspectRatio;
 
-public: // 프레임 및 디스크립터
     static UINT FrameCount;
     static UINT CBV_Table;
     static UINT FrameCBIndex;
@@ -37,6 +41,49 @@ public: // 프레임 및 디스크립터
     static UINT RTVCapacity;
     static UINT DSVCapacity;
 
-public:
     static DXGI_FORMAT RTVFormat;
+
+ // Global CBs
+public:
+    struct FrameParams {
+        DirectX::XMMATRIX view;
+        DirectX::XMMATRIX projection;
+        DirectX::XMMATRIX viewInv;
+        DirectX::XMMATRIX projInv;
+        DirectX::XMFLOAT3 cameraPosition;
+        float             cameraFov;
+        DirectX::XMFLOAT2 screenResolution;
+        float             time;
+        DirectX::XMFLOAT3 direction;
+        DirectX::XMFLOAT4 ambient;
+        DirectX::XMFLOAT4 diffuse;
+        DirectX::XMFLOAT3 lookAt;
+        DirectX::XMMATRIX lightViewMatrix;
+        DirectX::XMMATRIX lightProjectionMatrix;
+        float             shadowMapWidth;
+        float             shadowMapHeight;
+        float             shadowBias;
+        float             shadowSpread;
+
+        FrameParams();
+    }; // FrameParams
+
+public:
+    RendererState();
+    RendererState(const RendererState&) = delete;
+    RendererState& operator=(const RendererState&) = delete;
+    ~RendererState();
+
+    bool Init(ID3D12Device*);
+    void Frame(const FrameParams&);
+    void Shutdown();
+
+    D3D12_GPU_VIRTUAL_ADDRESS GetFrameCBGPUVirtualAddress() const;
+    D3D12_GPU_VIRTUAL_ADDRESS GetLightCBGPUVirtualAddress() const;
+
+private:
+    Microsoft::WRL::ComPtr<ID3D12Resource>   m_frameCB;
+    Microsoft::WRL::ComPtr<ID3D12Resource>   m_lightCB;
+    UINT8*                                   m_mappedFrameCB;
+    UINT8*                                   m_mappedLightCB;
 }; // RendererState

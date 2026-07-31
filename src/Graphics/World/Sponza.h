@@ -21,9 +21,9 @@ public:
     Sponza();
     virtual ~Sponza();
 
-    bool                     Init(const InitParams&);
-    void                     Submit(RenderQueue*);
-    void                     SubmitIndirect(ID3D12GraphicsCommandList*);
+    bool                        Init(const InitParams&);
+    void                        Submit(RenderQueue*);
+    void                        SubmitIndirect(ID3D12GraphicsCommandList*);
 
     const DirectX::XMMATRIX&    GetWorldMatrix() const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetInstanceDataGPUHandle() const;
@@ -38,7 +38,6 @@ private:
         IndirectCommand() : indexBufferView{}, instanceIndex(0), drawArgs{} {
         }
     }; // IndirectCommand
-
 
 private:
     bool BuildInstanceDataBuffer(ID3D12Device*);
