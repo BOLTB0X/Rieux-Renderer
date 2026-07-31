@@ -26,6 +26,8 @@
 #include "SharedCommons.h"
 #include "GPUCommons.h"
 #include "FunctionWidget.h"
+//
+#include <pix3.h>
 
 using namespace DebugHelper;
 using namespace DirectX;
@@ -357,9 +359,13 @@ void Renderer::PopulateCommandList() {
 
     // 스폰자 씬 렌더링
     m_RenderQueue->Clear();
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
+
     //m_Sponza->Submit(m_RenderQueue.get());
     //m_RenderQueue->Execute(cmdList);
     m_Sponza->SubmitIndirect(cmdList);
+
+    PIXEndEvent(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
