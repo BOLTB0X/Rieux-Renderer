@@ -157,9 +157,8 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
         b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
             .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)
-            .AddConstants("World", 2, 16, D3D12_SHADER_VISIBILITY_VERTEX)
-            .AddConstants("VertexBufferIndex", 3, 4, D3D12_SHADER_VISIBILITY_VERTEX)
-            .AddConstants("MaterialIndices", 4, 4, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddConstants("InstanceIndex", 2, 1, D3D12_SHADER_VISIBILITY_ALL)
+            .AddSRVTable("InstanceData", 1, D3D12_SHADER_VISIBILITY_ALL, 1, 0)
             .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1)     // t0, space1
             .AddSRVTable("BindlessBuffers", 0, D3D12_SHADER_VISIBILITY_VERTEX, -1, 2)     // t0, space2
             .AddStaticSampler(RendererState::StaticSamplerIndex);
@@ -169,9 +168,8 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
 
     RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
     RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
-    RendererState::WorldIndex = GetRootParamIndex(signatureKey, "World");
-    RendererState::VertexBufferIndexParam = GetRootParamIndex(signatureKey, "VertexBufferIndex");
-    RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
+    RendererState::InstanceIndexParam = GetRootParamIndex(signatureKey, "InstanceIndex");
+    RendererState::InstanceDataIndex = GetRootParamIndex(signatureKey, "InstanceData");
     RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
     RendererState::BindlessBufIndex = GetRootParamIndex(signatureKey, "BindlessBuffers");
 
@@ -213,7 +211,7 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     result &= BuildWireframeCullNone(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL, baseParams);
 
     if (!result) {
-        DebugHelper::DebugPrint("CPUSponza PSO 변형 초기화 실패");
+        DebugHelper::DebugPrint("GPUSponza PSO 변형 초기화 실패");
     }
 
     return result;

@@ -49,6 +49,14 @@ namespace GPUCommons {
         GPUMeshData() : vertexOffset(0), indexOffset(0), indexCount(0), materialIndex(0) {
         }
     }; // GPUMeshData
+
+    struct MeshInstanceData {
+        DirectX::XMMATRIX worldMatrix;
+        uint32_t          vertexBufferIndex;
+        uint32_t          albedoIndex;
+        uint32_t          normalIndex;
+        uint32_t          alphaIndex;
+    };
 } // struct
 
 namespace GPUCommons {

@@ -268,6 +268,7 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.textureManager = m_TextureManager;
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
     sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
+    sponzaInitParams.rootSignature = m_PSOManager->GetRootSignature(SharedCommons::KEY_GPU_SPONZA_SIG);
     sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL)->GetPSO();
     sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL)->GetPSO();
@@ -383,6 +384,7 @@ void Renderer::PopulateCommandList() {
     // CBV 바인딩
     cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_frameCB->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_lightCB->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, m_Sponza->GetInstanceDataGPUHandle());
     cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
     cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
 
@@ -398,8 +400,9 @@ void Renderer::PopulateCommandList() {
 
     // 스폰자 씬 렌더링
     m_RenderQueue->Clear();
-    m_Sponza->Submit(m_RenderQueue.get());
-    m_RenderQueue->Execute(cmdList);
+    //m_Sponza->Submit(m_RenderQueue.get());
+    //m_RenderQueue->Execute(cmdList);
+    m_Sponza->SubmitIndirect(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);

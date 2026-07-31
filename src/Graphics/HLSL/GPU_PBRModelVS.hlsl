@@ -8,23 +8,24 @@ struct PBRVertex
     float3 normal;
     float3 tangent;
     float3 binormal;
-}; //
+}; // PBRVertex
 
-StructuredBuffer<PBRVertex> g_VertexBuffers[] : register(t0, space2);
-
-cbuffer WorldCB : register(b2)
+struct MeshInstanceData
 {
-    matrix wWorld;
-}; // WorldCB
+    matrix worldMatrix;
+    uint vertexBufferIndex;
+    uint albedoIndex;
+    uint normalIndex;
+    uint alphaIndex;
+}; // MeshInstanceData
 
-#define WORLD wWorld
+StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
 
-cbuffer VertexBufferIndexCB : register(b3)
+cbuffer InstanceCB : register(b2)
 {
-    uint vVertexBufferIndex;
-}; // VertexBufferIndexCB
-
-#define VERTEX_BUFFER_INDEX vVertexBufferIndex
+    uint InstanceIndex;
+}; // InstanceCB
 
 struct VS_OUT
 {
@@ -38,18 +39,19 @@ struct VS_OUT
 
 VS_OUT main(uint vertexID : SV_VertexID)
 {
-    PBRVertex input = g_VertexBuffers[VERTEX_BUFFER_INDEX][vertexID];
-
+    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    PBRVertex input = g_VertexBuffers[inst.vertexBufferIndex][vertexID];
+    
     VS_OUT output;
-    float4 worldPos = mul(float4(input.position, 1.0f), WORLD);
+    float4 worldPos = mul(float4(input.position, 1.0f), inst.worldMatrix);
     output.positionWS = worldPos.xyz;
 
     float4 viewPos = mul(worldPos, VIEW);
     output.positionCS = mul(viewPos, PROJ);
 
-    output.normalWS = normalize(mul(input.normal, (float3x3) WORLD));
-    output.tangentWS = normalize(mul(input.tangent, (float3x3) WORLD));
-    output.binormalWS = normalize(mul(input.binormal, (float3x3) WORLD));
+    output.normalWS = normalize(mul(input.normal, (float3x3) inst.worldMatrix));
+    output.tangentWS = normalize(mul(input.tangent, (float3x3) inst.worldMatrix));
+    output.binormalWS = normalize(mul(input.binormal, (float3x3) inst.worldMatrix));
     output.texcoord = input.texcoord;
 
     return output;
