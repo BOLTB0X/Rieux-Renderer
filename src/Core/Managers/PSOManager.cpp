@@ -157,9 +157,10 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
         b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
             .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)
-            .AddConstants("World", 2, 16, D3D12_SHADER_VISIBILITY_VERTEX)
-            .AddConstants("MaterialIndices", 3, 4, D3D12_SHADER_VISIBILITY_PIXEL) 
-            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1) // t0, space1, unbounded
+            .AddConstants("InstanceIndex", 2, 1, D3D12_SHADER_VISIBILITY_ALL)
+            .AddSRVTable("InstanceData", 1, D3D12_SHADER_VISIBILITY_ALL, 1, 0)
+            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1)     // t0, space1
+            .AddSRVTable("BindlessBuffers", 0, D3D12_SHADER_VISIBILITY_VERTEX, -1, 2)     // t0, space2
             .AddStaticSampler(RendererState::StaticSamplerIndex);
         })) {
         return false;
@@ -167,25 +168,20 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
 
     RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
     RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
-    RendererState::WorldIndex = GetRootParamIndex(signatureKey, "World");
-    RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
+    RendererState::InstanceIndexParam = GetRootParamIndex(signatureKey, "InstanceIndex");
+    RendererState::InstanceDataIndex = GetRootParamIndex(signatureKey, "InstanceData");
     RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
+    RendererState::BindlessBufIndex = GetRootParamIndex(signatureKey, "BindlessBuffers");
 
     ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
     if (!rootSignature) {
         return false;
     }
 
-    //RendererState::MaterialIndicesIndex = GetRootParamIndex(signatureKey, "MaterialIndices");
-    //RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
-
-    //DebugHelper::DebugPrint("MaterialIndicesIndex = " + std::to_string(RendererState::MaterialIndicesIndex));
-    //DebugHelper::DebugPrint("BindlessTexIndex = " + std::to_string(RendererState::BindlessTexIndex));
-
     ComPtr<IDxcBlob> vsBlob;
     ComPtr<IDxcBlob> psBlob;
 
-    if (!ShaderHelper::InitVertexShader(SharedCommons::PBR_VS, vsBlob.GetAddressOf()) ||
+    if (!ShaderHelper::InitVertexShader(SharedCommons::GPU_PBR_VS, vsBlob.GetAddressOf()) ||
         !ShaderHelper::InitPixelShader(SharedCommons::GPU_SPONZA_PS, psBlob.GetAddressOf())) {
         return false;
     }
@@ -193,20 +189,12 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::GPU_SPONZA_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::GPU_SPONZA_PS_STR] = psBlob;
 
-    std::vector<D3D12_INPUT_ELEMENT_DESC> inputElements = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-    };
-
     D3D12PipelineState::InitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;
     baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
     baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
-    baseParams.inputLayout = { inputElements.data(), static_cast<UINT>(inputElements.size()) };
+    baseParams.inputLayout = { nullptr, 0 };
     baseParams.numRenderTargets = 1;
     baseParams.rtvFormats[0] = m_rtvFormat;
     baseParams.dsvFormat = m_dsvFormat;
@@ -223,7 +211,7 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     result &= BuildWireframeCullNone(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL, baseParams);
 
     if (!result) {
-        DebugHelper::DebugPrint("CPUSponza PSO 변형 초기화 실패");
+        DebugHelper::DebugPrint("GPUSponza PSO 변형 초기화 실패");
     }
 
     return result;

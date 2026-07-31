@@ -11,6 +11,7 @@ class AssimpLoader;
 class Texture;
 class TextureManager;
 class PBRMesh;
+class DescriptorHeapAllocator;
 
 class AssimpModel { friend class AssimpLoader;
 public:
@@ -40,8 +41,9 @@ public:
         ID3D12CommandQueue*             commandQueue;
         std::shared_ptr<TextureManager> textureManager;
         std::string                     path;
+        DescriptorHeapAllocator*        heapAllocator;
 
-        InitParams() : device(nullptr), commandQueue(nullptr), textureManager(nullptr), path("") {
+        InitParams() : device(nullptr), commandQueue(nullptr), textureManager(nullptr), path(""), heapAllocator(nullptr) {
         }
     }; // InitParams
 

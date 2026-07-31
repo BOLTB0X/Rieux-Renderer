@@ -19,7 +19,6 @@ D3D12PipelineState::InitParams::InitParams()
     dsvFormat(DXGI_FORMAT_D24_UNORM_S8_UINT),
     topologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) {
 
-    // 순수 Z-버퍼 기반 렌더링에 적합하도록 기본 뎁스 옵션 강화
     depthStencilState.DepthEnable = TRUE;
     depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;

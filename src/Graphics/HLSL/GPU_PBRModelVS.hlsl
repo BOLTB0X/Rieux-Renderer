@@ -1,58 +1,58 @@
 // GPU_PBRModelVS.hlsl
 #include "Commons.hlsli"
 
-struct VertexData
+struct PBRVertex
 {
-    float3 Position;
-    float2 TexCoord;
-    float3 Normal;
-    float3 Tangent;
-    float3 Binormal;
-}; // VertexData
+    float3 position;
+    float2 texcoord;
+    float3 normal;
+    float3 tangent;
+    float3 binormal;
+}; // PBRVertex
 
-struct GPUMeshData
+struct MeshInstanceData
 {
-    uint vertexOffset;
-    uint indexOffset;
-    uint indexCount;
-    uint materialIndex;
-}; // GPUMeshData
+    matrix worldMatrix;
+    uint vertexBufferIndex;
+    uint albedoIndex;
+    uint normalIndex;
+    uint alphaIndex;
+}; // MeshInstanceData
 
-StructuredBuffer<GPUMeshData> g_MeshDatas : register(t0, space0);
-StructuredBuffer<VertexData> g_Vertices : register(t1, space0);
+StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
 
-cbuffer WorldCB : register(b2, space0)
+cbuffer InstanceCB : register(b2)
 {
-    matrix g_world;
-}; // WorldCB
-
-#define WORLD g_world
+    uint InstanceIndex;
+}; // InstanceCB
 
 struct VS_OUT
 {
-    float4 pos : SV_POSITION;
-    float2 uv : TEXCOORD;
-    float3 normal : NORMAL;
-    uint   instID : INSTANCE_ID;
+    float4 positionCS : SV_POSITION;
+    float3 positionWS : POSITION_WS;
+    float3 normalWS : NORMAL_WS;
+    float3 tangentWS : TANGENT_WS;
+    float3 binormalWS : BINORMAL_WS;
+    float2 texcoord : TEXCOORD;
 }; // VS_OUT
 
-// 수동 Fetch Vertex Shader
-VS_OUT main(uint vertexID : SV_VertexID, uint instanceID : SV_InstanceID)
+VS_OUT main(uint vertexID : SV_VertexID)
 {
-    VS_OUT output;
-
-    GPUMeshData meshInfo = g_MeshDatas[instanceID];
-
-    uint globalVertexIdx = meshInfo.vertexOffset + vertexID;
-    VertexData v = g_Vertices[globalVertexIdx];
-
-    float4 worldPos = mul(float4(v.Position, 1.0f), WORLD);
-    float4 viewPos = mul(worldPos, VIEW);
-    output.pos = mul(viewPos, PROJ);
+    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    PBRVertex input = g_VertexBuffers[inst.vertexBufferIndex][vertexID];
     
-    output.uv = v.TexCoord;
-    output.normal = mul(v.Normal, (float3x3) WORLD);
-    output.instID = instanceID;
+    VS_OUT output;
+    float4 worldPos = mul(float4(input.position, 1.0f), inst.worldMatrix);
+    output.positionWS = worldPos.xyz;
+
+    float4 viewPos = mul(worldPos, VIEW);
+    output.positionCS = mul(viewPos, PROJ);
+
+    output.normalWS = normalize(mul(input.normal, (float3x3) inst.worldMatrix));
+    output.tangentWS = normalize(mul(input.tangent, (float3x3) inst.worldMatrix));
+    output.binormalWS = normalize(mul(input.binormal, (float3x3) inst.worldMatrix));
+    output.texcoord = input.texcoord;
 
     return output;
 } // main

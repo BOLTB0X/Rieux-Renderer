@@ -1,20 +1,23 @@
 #include "Pch.h"
 #include "PBRMesh.h"
+// Components
+#include "DescriptorHeapAllocator.h"
 // Utils
 #include "DebugHelper.h"
 
 using namespace DebugHelper;
+using namespace Microsoft::WRL;
 
 PBRMesh::PBRMesh()
-    : m_vbView{}, m_ibView{}, m_indexCount(0), m_materialIndex(0) {
+    : m_ibView{}, m_indexCount(0), m_materialIndex(0), m_vertexBufferSRVIndex(UINT_MAX) {
 } // PBRMesh
 
 PBRMesh::~PBRMesh() {
 } // ~PBRMesh
 
 bool PBRMesh::Init(const InitParams& params,
-    Microsoft::WRL::ComPtr<ID3D12Resource>& outVertexUpload,
-    Microsoft::WRL::ComPtr<ID3D12Resource>& outIndexUpload) {
+    ComPtr<ID3D12Resource>& outVertexUpload,
+    ComPtr<ID3D12Resource>& outIndexUpload) {
 
     if (!params.device || !params.uploadCmdList || !params.vertices || !params.indices) {
         DebugPrint("PBRMesh::Init - 잘못된 파라미터");
@@ -57,12 +60,22 @@ bool PBRMesh::Init(const InitParams& params,
     UpdateSubresources(params.uploadCmdList, m_vertexBuffer.Get(), outVertexUpload.Get(), 0, 0, 1, &vbData);
 
     CD3DX12_RESOURCE_BARRIER vbBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
-        m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        m_vertexBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
     params.uploadCmdList->ResourceBarrier(1, &vbBarrier);
 
-    m_vbView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vbView.StrideInBytes = sizeof(PBRVertex);
-    m_vbView.SizeInBytes = vbSize;
+    // StructuredBuffer SRV 생성
+    // 공유 힙에 슬롯 할당
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.NumElements = static_cast<UINT>(params.vertices->size());
+    srvDesc.Buffer.StructureByteStride = sizeof(PBRVertex);
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    m_vertexBufferSRVIndex = params.heapAllocator->Allocate();
+    params.device->CreateShaderResourceView(m_vertexBuffer.Get(), &srvDesc, params.heapAllocator->GetCPUHandle(m_vertexBufferSRVIndex));
 
     // --------------------------------------------------
     // Index Buffer
@@ -101,7 +114,6 @@ bool PBRMesh::Init(const InitParams& params,
 } // Init
 
 void PBRMesh::BindBuffers(ID3D12GraphicsCommandList* cmdList) {
-    cmdList->IASetVertexBuffers(0, 1, &m_vbView);
     cmdList->IASetIndexBuffer(&m_ibView);
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 } // BindBuffers
@@ -111,6 +123,10 @@ void PBRMesh::Render(ID3D12GraphicsCommandList* cmdList) {
     cmdList->DrawIndexedInstanced(m_indexCount, 1, 0, 0, 0);
 } // RenderBuffer
 
+const D3D12_INDEX_BUFFER_VIEW& PBRMesh::GetIndexBufferView() const { 
+    return m_ibView;
+} // GetIndexBufferView
+
 unsigned int PBRMesh::GetMaterialIndex() const {
     return m_materialIndex;
 } // GetMaterialIndex
@@ -118,6 +134,10 @@ unsigned int PBRMesh::GetMaterialIndex() const {
 UINT PBRMesh::GetIndexCount() const {
     return m_indexCount;
 } // GetIndexCount
+
+UINT PBRMesh::GetVertexBufferSRVIndex() const {
+    return m_vertexBufferSRVIndex;
+} // GetVertexBufferSRVIndex
 
 const std::string& PBRMesh::GetName() const {
     return m_name;

@@ -5,6 +5,8 @@
 #include <DirectXMath.h>
 #include <string>
 
+class DescriptorHeapAllocator;
+
 class PBRMesh {
 public:
     struct PBRVertex {
@@ -26,9 +28,10 @@ public:
         const std::vector<unsigned int>* indices;
         unsigned int                     materialIndex;
         std::string                      name;
+        DescriptorHeapAllocator*         heapAllocator;
 
         InitParams() : device(nullptr), uploadCmdList(nullptr), vertices(nullptr), indices(nullptr), 
-            materialIndex(0), name("") {
+            materialIndex(0), name(""), heapAllocator(nullptr) {
         } // InitParams
     }; // InitParams
 
@@ -46,16 +49,18 @@ public:
     void Render(ID3D12GraphicsCommandList*);
 
 public:
-    unsigned int       GetMaterialIndex() const;
-    UINT               GetIndexCount() const;
-    const std::string& GetName() const;
+    const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const;
+    unsigned int                   GetMaterialIndex() const;
+    UINT                           GetIndexCount() const;
+    UINT                           GetVertexBufferSRVIndex() const;
+    const std::string&             GetName() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW               m_vbView;
     D3D12_INDEX_BUFFER_VIEW                m_ibView;
     UINT                                   m_indexCount;
     UINT                                   m_materialIndex;
+    UINT                                   m_vertexBufferSRVIndex;
     std::string                            m_name;
-}; // PBRMesh
+}; // PBRMesh 

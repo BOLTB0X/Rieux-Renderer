@@ -74,7 +74,7 @@ bool D3D12SwapChain::Init(const InitParams& params) {
             return false;
         }
         params.device->CreateRenderTargetView(m_backBuffers[i].Get(), nullptr, rtvHandle);
-        m_rtvHandles[i] = rtvHandle; // 프레임별로 한 번만 계산해서 캐싱
+        m_rtvHandles[i] = rtvHandle;
         rtvHandle.ptr += m_rtvDescriptorSize;
     }
 

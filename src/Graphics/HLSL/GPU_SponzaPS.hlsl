@@ -11,25 +11,36 @@ struct PS_IN
     float2 texcoord : TEXCOORD;
 }; // PS_IN
 
-Texture2D    g_Textures[] : register(t0, space1);
-SamplerState Sampler : register(s0);
-
-cbuffer MaterialIndicesCB : register(b3)
+struct MeshInstanceData
 {
-    uint AlbedoIndex;
-    uint NormalIndex;
-    uint AlphaIndex;
-    uint _padding;
-}; // MaterialIndicesCB
+    matrix worldMatrix;
+    uint   vertexBufferIndex;
+    uint   albedoIndex;
+    uint   normalIndex;
+    uint   alphaIndex;
+}; // MeshInstanceData
+
+Texture2D                          g_Textures[] : register(t0, space1);
+SamplerState                       Sampler : register(s0);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
+
+cbuffer InstanceCB : register(b2)
+{
+    uint InstanceIndex;
+}; // InstanceCB
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    float4 alphaSample = g_Textures[AlphaIndex].Sample(Sampler, input.texcoord);
+    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    
+    float4 alphaSample = g_Textures[inst.alphaIndex].Sample(Sampler, input.texcoord);
     if (alphaSample.r < 0.1f)
+    {
         discard;
+    }
 
-    float4 albedoColor = g_Textures[AlbedoIndex].Sample(Sampler, input.texcoord);
-    float3 normalSample = g_Textures[NormalIndex].Sample(Sampler, input.texcoord).rgb;
+    float4 albedoColor = g_Textures[inst.albedoIndex].Sample(Sampler, input.texcoord);
+    float3 normalSample = g_Textures[inst.normalIndex].Sample(Sampler, input.texcoord).rgb;
     float3 localNormal = normalSample * 2.0f - 1.0f;
 
     float3 N = normalize(input.normalWS);

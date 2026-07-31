@@ -10,7 +10,7 @@ public:
     ~DirectionalLight();
 
     void Init();
-    void Update();
+    void Frame();
     void OnGUI();
 
     // Setter

@@ -17,16 +17,18 @@
 
 class Texture;
 class TextureManager;
+class DescriptorHeapAllocator;
 
 class AssimpLoader {
 public:
     struct LoadParams {
-        ID3D12Device* device;
-        ID3D12CommandQueue* commandQueue;
-        std::string         path;
-        AssimpModel* outModel;
+        ID3D12Device*            device;
+        ID3D12CommandQueue*      commandQueue;
+        std::string              path;
+        AssimpModel*             outModel;
+        DescriptorHeapAllocator* heapAllocator;
 
-        LoadParams() : device(nullptr), commandQueue(nullptr), path(""), outModel(nullptr) {
+        LoadParams() : device(nullptr), commandQueue(nullptr), path(""), outModel(nullptr), heapAllocator(nullptr) {
         }
     }; // LoadParams
 
@@ -50,6 +52,7 @@ private:
 private:
     std::shared_ptr<TextureManager>                     m_TextureManager;
     ID3D12Device*                                       m_device;
+    DescriptorHeapAllocator*                            m_heapAllocator;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue>          m_commandQueue;
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator>      m_uploadAllocator;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>   m_uploadCommandList;

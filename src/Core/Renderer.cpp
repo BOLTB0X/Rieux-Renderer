@@ -1,5 +1,6 @@
 #include "Pch.h"
 #include "Renderer.h"
+#include "RendererState.h"
 // D3D12
 #include "D3D12Device.h"
 #include "CommandQueue.h"
@@ -25,17 +26,20 @@
 #include "SharedCommons.h"
 #include "GPUCommons.h"
 #include "FunctionWidget.h"
+//
+#include <pix3.h>
 
 using namespace DebugHelper;
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 Renderer::Renderer()
-    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr), m_currentFrameParams{} {
+    : m_currentFrameParams{} {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
     m_SceneRenderTarget = std::make_unique<RenderTarget>();
+    m_RendererState = std::make_unique<RendererState>();
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
@@ -100,7 +104,7 @@ void Renderer::Shutdown() {
     m_GPUMonitor.reset();
 
     // 상수 버퍼 해제
-    ShutdownCommonCBs();
+    m_RendererState->Shutdown();
 
     m_sharedDescriptorAllocator.reset();
     m_SwapChain.reset();
@@ -124,14 +128,26 @@ bool Renderer::Frame(const FrameParams& frameParams) {
 
     m_Camera->Frame(frameParams.moveForward, frameParams.moveRight, frameParams.moveUp,
         frameParams.rotationDeltaX, frameParams.rotationDeltaY, frameParams.zoomDelta);
+    m_DirectionalLight->Frame();
     m_GPUMonitor->Frame();
+
+    RendererState::FrameParams stateParams;
+    stateParams.view = m_Camera->GetViewMatrix();
+    stateParams.projection = m_Camera->GetProjectionMatrix();
+    stateParams.cameraPosition = m_Camera->GetPosition();
+    stateParams.cameraFov = m_Camera->GetFov();
+    stateParams.direction = m_DirectionalLight->GetDirection();
+    stateParams.ambient = m_DirectionalLight->GetAmbient();
+    stateParams.diffuse = m_DirectionalLight->GetDiffuse();
+    stateParams.lookAt = m_DirectionalLight->GetLookAt();
+    stateParams.lightViewMatrix = m_DirectionalLight->GetViewMatrix();
+    stateParams.lightProjectionMatrix = m_DirectionalLight->GetProjection();
+    m_RendererState->Frame(stateParams);
 
     return Render();
 } // Frame
 
 bool Renderer::Render() {
-    UpdateCommonCBs();
-
     m_ImGuiManager->Render();
 
     PopulateCommandList();
@@ -190,12 +206,6 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
         return false;
     }
 
-    // 공용 상수 버퍼 초기화
-    if (!InitCommonCBs()) {
-        DebugHelper::DebugPrint("InitCommonCBs() 실패");
-        return false;
-    }
-
     // GPU 프로파일러 초기화
     GPUMonitor::InitParams gpuParams;
     gpuParams.adapter = m_D3D12Device->GetAdapter();
@@ -205,7 +215,6 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
         DebugHelper::DebugPrint("m_GPUMonitor 초기화 실패");
         return false;
     }
-
     return true;
 } // LoadPipeline
 
@@ -231,6 +240,14 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     rtParams.depthFormat = DXGI_FORMAT_D32_FLOAT;
 
     if (!m_SceneRenderTarget->Init(rtParams)) {
+        return false;
+    }
+
+    m_Camera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
+        SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+    m_DirectionalLight->Init();
+    if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
+        DebugHelper::DebugPrint("m_RendererState 초기화 실패");
         return false;
     }
 
@@ -267,11 +284,12 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.commandQueue = m_CommandQueue->GetQueue();
     sponzaInitParams.textureManager = m_TextureManager;
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
+    sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
+    sponzaInitParams.rootSignature = m_PSOManager->GetRootSignature(SharedCommons::KEY_GPU_SPONZA_SIG);
     sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL)->GetPSO();
     sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL)->GetPSO();
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
-    sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
         return false;
@@ -314,64 +332,6 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     return true;
 } // UpdateGUIs
 
-bool Renderer::InitCommonCBs() {
-    m_Camera->Init(SharedCommons::DEFAULT_FOV,
-        (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
-        SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
-    m_DirectionalLight->Init();
-
-    CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
-    const UINT frameCBSize = (sizeof(GPUCommons::FrameCB) + 255) & ~255;
-    const UINT lightCBSize = (sizeof(GPUCommons::DirectionalLightCB) + 255) & ~255;
-
-    // FrameCB 리소스 생성 및 맵핑
-    CD3DX12_RESOURCE_DESC frameCBDesc = CD3DX12_RESOURCE_DESC::Buffer(frameCBSize);
-    m_D3D12Device->GetDevice()->CreateCommittedResource(
-        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &frameCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr, IID_PPV_ARGS(&m_frameCB));
-    m_frameCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedFrameCB));
-
-    // LightCB 리소스 생성 및 맵핑
-    CD3DX12_RESOURCE_DESC lightCBDesc = CD3DX12_RESOURCE_DESC::Buffer(lightCBSize);
-    m_D3D12Device->GetDevice()->CreateCommittedResource(
-        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &lightCBDesc, D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr, IID_PPV_ARGS(&m_lightCB));
-    m_lightCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedLightCB));
-    return true;
-} // InitCommonCBs
-
-void Renderer::UpdateCommonCBs() {
-    m_Camera->Update();
-    m_DirectionalLight->Update();
-
-    GPUCommons::FrameCB frameData;
-    frameData.view = XMMatrixTranspose(m_Camera->GetViewMatrix());
-    frameData.projection = XMMatrixTranspose(m_Camera->GetProjectionMatrix());
-    frameData.cameraPosition = m_Camera->GetPosition();
-    frameData.cameraFov = m_Camera->GetFov();
-    memcpy(m_mappedFrameCB, &frameData, sizeof(GPUCommons::FrameCB));
-
-    GPUCommons::DirectionalLightCB lightData;
-    lightData.direction = m_DirectionalLight->GetDirection();
-    lightData.ambient = m_DirectionalLight->GetAmbient();
-    lightData.diffuse = m_DirectionalLight->GetDiffuse();
-    lightData.lookAt = m_DirectionalLight->GetLookAt();
-    lightData.lightViewMatrix = XMMatrixTranspose(m_DirectionalLight->GetViewMatrix());
-    lightData.lightProjectionMatrix = XMMatrixTranspose(m_DirectionalLight->GetProjection());
-    memcpy(m_mappedLightCB, &lightData, sizeof(GPUCommons::DirectionalLightCB));
-} // UpdateCommonCBs
-
-void Renderer::ShutdownCommonCBs() {
-    if (m_frameCB) {
-        m_frameCB->Unmap(0, nullptr);
-        m_frameCB.Reset();
-    }
-    if (m_lightCB) {
-        m_lightCB->Unmap(0, nullptr);
-        m_lightCB.Reset();
-    }
-} // ShutdownCommonCBs
-
 void Renderer::PopulateCommandList() {
     m_CommandQueue->Reset();
     ID3D12GraphicsCommandList* cmdList = m_CommandQueue->GetList();
@@ -381,9 +341,11 @@ void Renderer::PopulateCommandList() {
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
     // CBV 바인딩
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_frameCB->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_lightCB->GetGPUVirtualAddress());
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0)); // 추가
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_RendererState->GetFrameCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_RendererState->GetLightCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, m_Sponza->GetInstanceDataGPUHandle());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
@@ -397,8 +359,13 @@ void Renderer::PopulateCommandList() {
 
     // 스폰자 씬 렌더링
     m_RenderQueue->Clear();
-    m_Sponza->Submit(m_RenderQueue.get());
-    m_RenderQueue->Execute(cmdList);
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
+
+    //m_Sponza->Submit(m_RenderQueue.get());
+    //m_RenderQueue->Execute(cmdList);
+    m_Sponza->SubmitIndirect(cmdList);
+
+    PIXEndEvent(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);

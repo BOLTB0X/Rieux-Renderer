@@ -22,11 +22,11 @@ void DirectionalLight::Init() {
     m_diffuse = LIGHT_DIFFUSE;
     m_ambient = LIGHT_AMBIENT;
 
-    Update();
+    Frame();
     return;
 } // Init
 
-void DirectionalLight::Update() {
+void DirectionalLight::Frame() {
     XMVECTOR dir = XMLoadFloat3(&m_direction);
     XMVECTOR upVector = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     dir = XMVector3Normalize(dir);
@@ -39,7 +39,7 @@ void DirectionalLight::Update() {
 
     m_viewMatrix = XMMatrixLookAtLH(lightPos, lookAt, upVector);
     m_projectionMatrix = XMMatrixOrthographicLH(SHADOW_VIEW_WIDTH, SHADOW_VIEW_HEIGHT, SHADOW_NEAR_Z, SHADOW_FAR_Z);
-} // Update
+} // Frame
 
 void DirectionalLight::SetLookAt(XMFLOAT3 lookAt) {
     m_lookAt = XMFLOAT3(lookAt);
@@ -105,7 +105,7 @@ void DirectionalLight::OnGUI() {
         m_direction = LIGHT_DIR;
         m_diffuse = LIGHT_DIFFUSE;
         m_ambient = LIGHT_AMBIENT;
-        Update();
+        Frame();
     }
 
     ImGui::PopStyleColor(3);
@@ -122,7 +122,7 @@ void DirectionalLight::OnGUI() {
             if (length > 0.0f) {
                 XMStoreFloat3(&m_direction, XMVector3Normalize(dir));
             }
-            Update(); // 행렬 갱신
+            Frame(); // 행렬 갱신
         }
 
         ImGui::ColorEdit4("Diffuse Color", &m_diffuse.x);
@@ -131,7 +131,7 @@ void DirectionalLight::OnGUI() {
         ImGui::Separator();
 
         if (ImGui::DragFloat3("Look At", &m_lookAt.x, 0.1f)) {
-            Update();
+            Frame();
         }
 
         ImGui::Spacing();
@@ -146,7 +146,7 @@ void DirectionalLight::OnGUI() {
         ImGui::Separator();
 
         if (ImGui::DragFloat3("Look At", &m_lookAt.x, 0.1f)) {
-            Update();
+            Frame();
         }
     }
 } // OnGui
