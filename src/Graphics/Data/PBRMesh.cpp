@@ -6,17 +6,18 @@
 #include "DebugHelper.h"
 
 using namespace DebugHelper;
+using namespace Microsoft::WRL;
 
 PBRMesh::PBRMesh()
-    : m_vbView{}, m_ibView{}, m_indexCount(0), m_materialIndex(0), m_vertexBufferSRVIndex(UINT_MAX) {
+    : m_ibView{}, m_indexCount(0), m_materialIndex(0), m_vertexBufferSRVIndex(UINT_MAX) {
 } // PBRMesh
 
 PBRMesh::~PBRMesh() {
 } // ~PBRMesh
 
 bool PBRMesh::Init(const InitParams& params,
-    Microsoft::WRL::ComPtr<ID3D12Resource>& outVertexUpload,
-    Microsoft::WRL::ComPtr<ID3D12Resource>& outIndexUpload) {
+    ComPtr<ID3D12Resource>& outVertexUpload,
+    ComPtr<ID3D12Resource>& outIndexUpload) {
 
     if (!params.device || !params.uploadCmdList || !params.vertices || !params.indices) {
         DebugPrint("PBRMesh::Init - 잘못된 파라미터");
@@ -113,9 +114,6 @@ bool PBRMesh::Init(const InitParams& params,
 } // Init
 
 void PBRMesh::BindBuffers(ID3D12GraphicsCommandList* cmdList) {
-    //cmdList->IASetVertexBuffers(0, 1, &m_vbView);
-    //cmdList->IASetIndexBuffer(&m_ibView);
-    //cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmdList->IASetIndexBuffer(&m_ibView);
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 } // BindBuffers
@@ -124,6 +122,10 @@ void PBRMesh::Render(ID3D12GraphicsCommandList* cmdList) {
     BindBuffers(cmdList);
     cmdList->DrawIndexedInstanced(m_indexCount, 1, 0, 0, 0);
 } // RenderBuffer
+
+const D3D12_INDEX_BUFFER_VIEW& PBRMesh::GetIndexBufferView() const { 
+    return m_ibView;
+} // GetIndexBufferView
 
 unsigned int PBRMesh::GetMaterialIndex() const {
     return m_materialIndex;

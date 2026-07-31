@@ -28,6 +28,25 @@ find_package(directxtex CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(assimp CONFIG REQUIRED)
 
+# ==========================================
+# PIX (WinPixEventRuntime) 자동 다운로드 (NuGet)
+# ==========================================
+include(FetchContent)
+FetchContent_Declare(
+    WinPixEventRuntime
+    URL "https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.240308001"
+)
+FetchContent_GetProperties(WinPixEventRuntime)
+if(NOT winpixeventruntime_POPULATED)
+    FetchContent_Populate(WinPixEventRuntime)
+endif()
+
+# 다운로드된 PIX 패키지의 경로 설정
+set(PIX_ROOT_DIR "${winpixeventruntime_SOURCE_DIR}")
+set(PIX_INCLUDE_DIR "${PIX_ROOT_DIR}/Include/WinPixEventRuntime")
+set(PIX_LIBRARY "${PIX_ROOT_DIR}/bin/x64/WinPixEventRuntime.lib")
+set(PIX_DLL "${PIX_ROOT_DIR}/bin/x64/WinPixEventRuntime.dll")
+
 # 헤더 포함 경로 설정
 target_include_directories(${PROJECT_NAME} PRIVATE 
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -41,11 +60,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Tool"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/World"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utils"
+    "${PIX_INCLUDE_DIR}" # PIX 헤더 경로 추가
 )
 
 # 라이브러리 연결
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+    "${PIX_LIBRARY}" # PIX 라이브러리 링크
     d3d12.lib
     dxgi.lib
     dxguid.lib
@@ -57,6 +78,9 @@ target_link_libraries(${PROJECT_NAME}
     spdlog::spdlog
     assimp::assimp
 )
+
+# 매크로 추가 (코드에서 #ifdef USE_PIX 로 제어 가능)
+target_compile_definitions(${PROJECT_NAME} PRIVATE USE_PIX)
 
 # 미리 컴파일된 헤더 설정
 target_precompile_headers(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/Pch.h")
@@ -83,7 +107,7 @@ foreach(FILE ${SOURCES})
     endif()
 endforeach()
 
-# 빌드 폴더로 에셋 및 셰이더 복사 설정
+# 빌드 폴더로 에셋, 셰이더, PIX DLL 복사 설정
 set(HLSL_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/HLSL")
 set(HLSL_OUTPUT_DIR "${CMAKE_BINARY_DIR}/HLSL")
 set(ASSETS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
@@ -96,5 +120,10 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${ASSETS_OUTPUT_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${ASSETS_SOURCE_DIR}" "${ASSETS_OUTPUT_DIR}"
     
-    COMMENT "Copying HLSL shaders and Assets to build directory..."
+    # 빌드 성공 후 PIX DLL을 실행 파일 위치로 복사
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${PIX_DLL}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    
+    COMMENT "Copying HLSL shaders, Assets, and PIX runtime to build directory..."
 )

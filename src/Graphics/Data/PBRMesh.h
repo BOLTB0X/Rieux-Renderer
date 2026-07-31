@@ -49,15 +49,15 @@ public:
     void Render(ID3D12GraphicsCommandList*);
 
 public:
-    unsigned int       GetMaterialIndex() const;
-    UINT               GetIndexCount() const;
-    UINT               GetVertexBufferSRVIndex() const;
-    const std::string& GetName() const;
+    const D3D12_INDEX_BUFFER_VIEW& GetIndexBufferView() const;
+    unsigned int                   GetMaterialIndex() const;
+    UINT                           GetIndexCount() const;
+    UINT                           GetVertexBufferSRVIndex() const;
+    const std::string&             GetName() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_indexBuffer;
-    D3D12_VERTEX_BUFFER_VIEW               m_vbView;
     D3D12_INDEX_BUFFER_VIEW                m_ibView;
     UINT                                   m_indexCount;
     UINT                                   m_materialIndex;
