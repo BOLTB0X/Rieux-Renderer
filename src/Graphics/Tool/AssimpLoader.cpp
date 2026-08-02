@@ -125,6 +125,8 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
 
     XMVECTOR det;
     XMMATRIX worldInvTranspose = XMMatrixTranspose(XMMatrixInverse(&det, worldTransform));
+    XMVECTOR aabbMin = XMVectorReplicate(FLT_MAX);
+    XMVECTOR aabbMax = XMVectorReplicate(-FLT_MAX);
 
     for (UINT i = 0; i < mesh->mNumVertices; ++i) {
         PBRMesh::PBRVertex v;
@@ -157,8 +159,10 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
             XMStoreFloat3(&v.binormal, bitangent);
         }
 
+        aabbMin = XMVectorMin(aabbMin, pos);
+        aabbMax = XMVectorMax(aabbMax, pos);
         vertices.push_back(v);
-    }
+    } // for (UINT i = 0; i < mesh->mNumVertices; ++i)
 
     std::vector<unsigned int> indices;
     indices.reserve(static_cast<size_t>(mesh->mNumFaces) * 3);
@@ -169,6 +173,9 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
         }
     }
 
+    XMFLOAT3 finalAabbMin, finalAabbMax;
+    XMStoreFloat3(&finalAabbMin, aabbMin);
+    XMStoreFloat3(&finalAabbMax, aabbMax);
     auto pbrMesh = std::make_unique<PBRMesh>();
 
     PBRMesh::InitParams meshParams;
@@ -179,6 +186,8 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
     meshParams.materialIndex = mesh->mMaterialIndex;
     meshParams.heapAllocator = m_heapAllocator;
     meshParams.name = mesh->mName.C_Str();
+    meshParams.aabbMin = finalAabbMin;
+    meshParams.aabbMax = finalAabbMax;
 
     ComPtr<ID3D12Resource> vbUpload;
     ComPtr<ID3D12Resource> ibUpload;
