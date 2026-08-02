@@ -9,7 +9,8 @@ using namespace DebugHelper;
 using namespace Microsoft::WRL;
 
 PBRMesh::PBRMesh()
-    : m_ibView{}, m_indexCount(0), m_materialIndex(0), m_vertexBufferSRVIndex(UINT_MAX) {
+    : m_ibView{}, m_indexCount(0), m_materialIndex(0),
+    m_vertexBufferSRVIndex(UINT_MAX), m_aabbMin(FLT_MAX, FLT_MAX, FLT_MAX), m_aabbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX) {
 } // PBRMesh
 
 PBRMesh::~PBRMesh() {
@@ -27,6 +28,8 @@ bool PBRMesh::Init(const InitParams& params,
     m_indexCount = static_cast<UINT>(params.indices->size());
     m_materialIndex = params.materialIndex;
     m_name = params.name;
+    m_aabbMin = params.aabbMin;
+    m_aabbMax = params.aabbMax;
 
     const UINT vbSize = static_cast<UINT>(sizeof(PBRVertex) * params.vertices->size());
     const UINT ibSize = static_cast<UINT>(sizeof(unsigned int) * params.indices->size());
@@ -142,3 +145,11 @@ UINT PBRMesh::GetVertexBufferSRVIndex() const {
 const std::string& PBRMesh::GetName() const {
     return m_name;
 } // GetName
+
+const DirectX::XMFLOAT3& PBRMesh::GetAABBMin() const {
+    return m_aabbMin;
+} // GetAABBMin
+
+const DirectX::XMFLOAT3& PBRMesh::GetAABBMax() const {
+    return m_aabbMax;
+} // GetAABBMax

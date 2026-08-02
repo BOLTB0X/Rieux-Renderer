@@ -29,9 +29,13 @@ public:
         unsigned int                     materialIndex;
         std::string                      name;
         DescriptorHeapAllocator*         heapAllocator;
+        DirectX::XMFLOAT3                aabbMin;
+        DirectX::XMFLOAT3                aabbMax;
 
-        InitParams() : device(nullptr), uploadCmdList(nullptr), vertices(nullptr), indices(nullptr), 
-            materialIndex(0), name(""), heapAllocator(nullptr) {
+        InitParams() : device(nullptr), uploadCmdList(nullptr),
+            vertices(nullptr), indices(nullptr), 
+            materialIndex(0), name(""), heapAllocator(nullptr),
+            aabbMin(0.0f, 0.0f, 0.0f), aabbMax(0.0f, 0.0f, 0.0f) {
         } // InitParams
     }; // InitParams
 
@@ -54,6 +58,8 @@ public:
     UINT                           GetIndexCount() const;
     UINT                           GetVertexBufferSRVIndex() const;
     const std::string&             GetName() const;
+    const DirectX::XMFLOAT3&       GetAABBMin() const;
+    const DirectX::XMFLOAT3&       GetAABBMax() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
@@ -63,4 +69,6 @@ private:
     UINT                                   m_materialIndex;
     UINT                                   m_vertexBufferSRVIndex;
     std::string                            m_name;
+    DirectX::XMFLOAT3                      m_aabbMin;
+    DirectX::XMFLOAT3                      m_aabbMax;
 }; // PBRMesh 

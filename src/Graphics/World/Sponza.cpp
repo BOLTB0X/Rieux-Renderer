@@ -5,6 +5,7 @@
 // Components
 #include "RenderQueue.h"
 #include "DescriptorHeapAllocator.h"
+#include "Frustum.h"
 // D3D12
 #include "D3D12/D3D12PipelineState.h"
 // Resources
@@ -20,7 +21,7 @@ using namespace Microsoft::WRL;
 using namespace DirectX;
 
 Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{}, m_instanceDataDescriptorIndex(0),
-            m_mainIndirectCount(0), m_vaseIndirectCount(0) {
+            m_mainIndirectCount(0), m_vaseIndirectCount(0), m_freezeCulling(false) {
     m_worldMatrix = XMMatrixIdentity();
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
@@ -67,12 +68,69 @@ bool Sponza::Init(const InitParams& params) {
     return true;
 } // Init
 
+void Sponza::Frame(Frustum* frustum) {
+    if (!frustum || m_freezeCulling) {
+        return;
+    }
+
+    std::vector<IndirectCommand> visibleMain, visibleVase;
+
+    UINT instanceIndex = 0;
+    for (const auto& mesh : m_meshes) {
+        if (!mesh) {
+            ++instanceIndex;
+            continue;
+        }
+
+        XMFLOAT3 mn = mesh->GetAABBMin();
+        XMFLOAT3 mx = mesh->GetAABBMax();
+
+        bool visible = frustum->CheckBoundingBoxMinMax(mx.x, mx.y, mx.z, mn.x, mn.y, mn.z);
+
+        if (visible) {
+            bool isVase = false;
+            std::string meshName = mesh->GetName();
+            if (meshName.find("vase") != std::string::npos ||
+                meshName.find("leaf") != std::string::npos ||
+                meshName.find("Material__57") != std::string::npos) {
+                isVase = true;
+            }
+
+            IndirectCommand cmd{};
+            cmd.instanceIndex = instanceIndex;
+            cmd.indexBufferView = mesh->GetIndexBufferView();
+            cmd.drawArgs.IndexCountPerInstance = mesh->GetIndexCount();
+            cmd.drawArgs.InstanceCount = 1;
+            cmd.drawArgs.StartIndexLocation = 0;
+            cmd.drawArgs.BaseVertexLocation = 0;
+            cmd.drawArgs.StartInstanceLocation = 0;
+
+            (isVase ? visibleVase : visibleMain).push_back(cmd);
+        }
+        ++instanceIndex;
+    } // for (const auto& mesh : m_meshes)
+
+    auto rewrite = [](ComPtr<ID3D12Resource>& buf, const std::vector<IndirectCommand>& cmds) {
+        if (!buf || cmds.empty()) return;
+        void* mapped = nullptr;
+        buf->Map(0, nullptr, &mapped);
+        memcpy(mapped, cmds.data(), sizeof(IndirectCommand) * cmds.size());
+        buf->Unmap(0, nullptr);
+        }; // rewrite
+
+    rewrite(m_mainIndirectBuffer, visibleMain);
+    rewrite(m_vaseIndirectBuffer, visibleVase);
+
+    m_mainIndirectCount = static_cast<UINT>(visibleMain.size());
+    m_vaseIndirectCount = static_cast<UINT>(visibleVase.size());
+} // Frame
+
 void Sponza::Submit(RenderQueue* renderQueue) {
     if (!renderQueue) {
         return;
     }
 
-    UINT instanceIndex = 0; // 버퍼 내 자신의 인덱스 추적
+    UINT instanceIndex = 0;
 
     for (const auto& mesh : m_meshes) {
         if (!mesh) continue;
@@ -133,11 +191,17 @@ D3D12_GPU_DESCRIPTOR_HANDLE Sponza::GetInstanceDataGPUHandle() const {
     return m_heapAllocator->GetGPUHandle(m_instanceDataDescriptorIndex);
 } // GetInstanceDataGPUHandle
 
+UINT Sponza::GetVisibleCount() const {
+    return m_mainIndirectCount + m_vaseIndirectCount;
+} // GetVisibleCount
+
 void Sponza::OnGUI() {
     ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Sponza Options ]");
     ImGui::Checkbox("Wireframe Mode", &m_enableWireframe);
-
     ImGui::Separator();
+    ImGui::Text("Visible Mesh: %u / %d", GetVisibleCount(), GetMeshCount());
+    ImGui::Separator();
+    ImGui::Checkbox("Freeze Culling Frustum", &m_freezeCulling);
     ImGui::Spacing();
 
     ImGui::TextDisabled("Resource Info");

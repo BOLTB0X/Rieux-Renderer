@@ -26,7 +26,7 @@
 #include "SharedCommons.h"
 #include "GPUCommons.h"
 #include "FunctionWidget.h"
-//
+// PIX
 #include <pix3.h>
 
 using namespace DebugHelper;
@@ -143,6 +143,8 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     stateParams.lightViewMatrix = m_DirectionalLight->GetViewMatrix();
     stateParams.lightProjectionMatrix = m_DirectionalLight->GetProjection();
     m_RendererState->Frame(stateParams);
+    
+    m_Sponza->Frame(m_Camera->GetFrustum());
 
     return Render();
 } // Frame
@@ -361,8 +363,6 @@ void Renderer::PopulateCommandList() {
     m_RenderQueue->Clear();
     PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
 
-    //m_Sponza->Submit(m_RenderQueue.get());
-    //m_RenderQueue->Execute(cmdList);
     m_Sponza->SubmitIndirect(cmdList);
 
     PIXEndEvent(cmdList);
@@ -428,7 +428,7 @@ void Renderer::OnGUI() {
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ GPU PROFILING ]");
 
     double opaquePassTime = m_GPUMonitor->GetTimeMs(0, 1);
-    ImGui::Text("Sponza Opaque Pass: %.3f ms", opaquePassTime);
+    ImGui::Text("Sponza Pass: %.3f ms", opaquePassTime);
     ImGui::ProgressBar(static_cast<float>(opaquePassTime / 16.6), ImVec2(200.0f, 0.0f), "");
     ImGui::Separator();
 

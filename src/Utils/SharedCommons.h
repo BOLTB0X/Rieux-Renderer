@@ -52,8 +52,8 @@ namespace SharedCommons {
 } // CB
 
 namespace SharedCommons {
-    static const std::wstring TRIANGLE_VS = L"HLSL/HelloTriangleVS.hlsl";
-    static const std::wstring TRIANGLE_PS = L"HLSL/HelloTrianglePS.hlsl";
+    static const std::wstring DEBUG_LINE_VS = L"HLSL/DebugLineVS.hlsl";
+    static const std::wstring DEBUG_LINE_PS = L"HLSL/DebugLinePS.hlsl";
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
     static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";

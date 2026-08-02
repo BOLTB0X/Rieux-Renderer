@@ -46,7 +46,7 @@ namespace MathHelper { // 벡터 상수
     inline const DirectX::XMVECTOR UP = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 } // 벡터 상수
 
-namespace MathHelper { // 벡터 함수
+namespace MathHelper { // 함수
     inline DirectX::XMFLOAT3 Add(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b) {
         return { a.x + b.x, a.y + b.y, a.z + b.z };
     } // Add

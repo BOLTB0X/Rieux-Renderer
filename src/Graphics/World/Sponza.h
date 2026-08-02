@@ -6,6 +6,7 @@
 #include <d3d12.h>
 
 class RenderQueue;
+class Frustum;
 
 class Sponza : public AssimpModel {
 public:
@@ -22,11 +23,13 @@ public:
     virtual ~Sponza();
 
     bool                        Init(const InitParams&);
+    void                        Frame(Frustum*);
     void                        Submit(RenderQueue*);
     void                        SubmitIndirect(ID3D12GraphicsCommandList*);
 
     const DirectX::XMMATRIX&    GetWorldMatrix() const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetInstanceDataGPUHandle() const;
+    UINT                        GetVisibleCount() const;
     void                        OnGUI();
 
 private:
@@ -60,4 +63,5 @@ private:
     UINT                                           m_instanceDataDescriptorIndex;
     UINT                                           m_mainIndirectCount;
     UINT                                           m_vaseIndirectCount;
+    bool                                           m_freezeCulling;
 }; // Sponza
