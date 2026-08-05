@@ -26,6 +26,14 @@ UINT  RendererState::VertexBufferIndexParam = 5;
 UINT  RendererState::BindlessTexIndex = 6;
 UINT  RendererState::BindlessBufIndex = 7;
 
+UINT  RendererState::CullingFrustumPlanesIndex = 3;
+UINT  RendererState::CullingMasterInstanceIndex = 4;
+UINT  RendererState::CullingMasterCommandsIndex = 5;
+UINT  RendererState::CullingVisibleMainCommandsIndex = 6;
+UINT  RendererState::CullingVisibleVaseCommandsIndex = 7;
+UINT  RendererState::CullingMainCountIndex = 8;
+UINT  RendererState::CullingVaseCountIndex = 9;
+
 UINT  RendererState::SharedHeapCapacity = 1024;
 
 UINT  RendererState::RTVCapacity = 64;

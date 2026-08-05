@@ -3,7 +3,6 @@
 // Core
 #include "RendererState.h"
 // Components
-#include "RenderQueue.h"
 #include "DescriptorHeapAllocator.h"
 #include "Frustum.h"
 // D3D12
@@ -21,16 +20,18 @@ using namespace Microsoft::WRL;
 using namespace DirectX;
 
 Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{}, m_instanceDataDescriptorIndex(0),
-            m_mainIndirectCount(0), m_vaseIndirectCount(0), m_freezeCulling(false) {
+    m_masterIndirectDescriptorIndex(0), m_mainIndirectCount(0), m_vaseIndirectCount(0), m_freezeCulling(false) {
     m_worldMatrix = XMMatrixIdentity();
+	m_rootSignature = nullptr;
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
     m_psoWireCull = nullptr;
     m_psoWireNoCull = nullptr;
     m_heapAllocator = nullptr;
-} // StaticModel
+} // Sponza
 
 Sponza::~Sponza() {
+	m_rootSignature = nullptr;
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
     m_psoWireCull = nullptr;
@@ -45,6 +46,7 @@ bool Sponza::Init(const InitParams& params) {
         return false;
     }
 
+	m_rootSignature = params.rootSignature;
     m_heapAllocator = params.heapAllocator;
 
     if (!AssimpModel::Init(params)) {
@@ -68,118 +70,46 @@ bool Sponza::Init(const InitParams& params) {
     return true;
 } // Init
 
-void Sponza::Frame(Frustum* frustum) {
-    if (!frustum || m_freezeCulling) {
-        return;
-    }
+void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
+    ID3D12GraphicsCommandList* cmdList = params.cmdList;
 
-    std::vector<IndirectCommand> visibleMain, visibleVase;
+    cmdList->SetGraphicsRootSignature(m_rootSignature);
 
-    UINT instanceIndex = 0;
-    for (const auto& mesh : m_meshes) {
-        if (!mesh) {
-            ++instanceIndex;
-            continue;
-        }
+    // CBV 바인딩
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, params.frameConstantsGPUAddress);
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, params.lightConstantsGPUAddress);
 
-        XMFLOAT3 mn = mesh->GetAABBMin();
-        XMFLOAT3 mx = mesh->GetAABBMax();
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, GetInstanceDataGPUHandle());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_heapAllocator->GetGPUHandle(0));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_heapAllocator->GetGPUHandle(0));
 
-        bool visible = frustum->CheckBoundingBoxMinMax(mx.x, mx.y, mx.z, mn.x, mn.y, mn.z);
-
-        if (visible) {
-            bool isVase = false;
-            std::string meshName = mesh->GetName();
-            if (meshName.find("vase") != std::string::npos ||
-                meshName.find("leaf") != std::string::npos ||
-                meshName.find("Material__57") != std::string::npos) {
-                isVase = true;
-            }
-
-            IndirectCommand cmd{};
-            cmd.instanceIndex = instanceIndex;
-            cmd.indexBufferView = mesh->GetIndexBufferView();
-            cmd.drawArgs.IndexCountPerInstance = mesh->GetIndexCount();
-            cmd.drawArgs.InstanceCount = 1;
-            cmd.drawArgs.StartIndexLocation = 0;
-            cmd.drawArgs.BaseVertexLocation = 0;
-            cmd.drawArgs.StartInstanceLocation = 0;
-
-            (isVase ? visibleVase : visibleMain).push_back(cmd);
-        }
-        ++instanceIndex;
-    } // for (const auto& mesh : m_meshes)
-
-    auto rewrite = [](ComPtr<ID3D12Resource>& buf, const std::vector<IndirectCommand>& cmds) {
-        if (!buf || cmds.empty()) return;
-        void* mapped = nullptr;
-        buf->Map(0, nullptr, &mapped);
-        memcpy(mapped, cmds.data(), sizeof(IndirectCommand) * cmds.size());
-        buf->Unmap(0, nullptr);
-        }; // rewrite
-
-    rewrite(m_mainIndirectBuffer, visibleMain);
-    rewrite(m_vaseIndirectBuffer, visibleVase);
-
-    m_mainIndirectCount = static_cast<UINT>(visibleMain.size());
-    m_vaseIndirectCount = static_cast<UINT>(visibleVase.size());
-} // Frame
-
-void Sponza::Submit(RenderQueue* renderQueue) {
-    if (!renderQueue) {
-        return;
-    }
-
-    UINT instanceIndex = 0;
-
-    for (const auto& mesh : m_meshes) {
-        if (!mesh) continue;
-
-        bool isVase = false;
-        std::string meshName = mesh->GetName();
-
-        if (meshName.find("vase") != std::string::npos ||
-            meshName.find("leaf") != std::string::npos ||
-            meshName.find("Material__57") != std::string::npos) {
-            isVase = true;
-        }
-
-        ID3D12PipelineState* targetPSO = m_enableWireframe
-            ? (isVase ? m_psoWireNoCull : m_psoWireCull)
-            : (isVase ? m_psoSolidNoCull : m_psoSolidCull);
-
-        DrawCommand cmd{};
-        cmd.sortKey = 0;
-        cmd.pso = targetPSO;
-
-        cmd.execute = [this, meshPtr = mesh.get(), instanceIndex](ID3D12GraphicsCommandList* cmdList) {
-            cmdList->SetGraphicsRoot32BitConstants(
-                RendererState::InstanceIndexParam,
-                1,
-                &instanceIndex,
-                0
-            );
-            meshPtr->Render(cmdList);
-        };
-
-        renderQueue->Submit(cmd);
-        instanceIndex++;
-    }
-} // Submit
-
-void Sponza::SubmitIndirect(ID3D12GraphicsCommandList* cmdList) {
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     ID3D12PipelineState* mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
     ID3D12PipelineState* vasePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;
 
-    if (m_mainIndirectCount > 0) {
+    if (params.mainVisibleCommandsBuffer && m_mainIndirectCount > 0) {
         cmdList->SetPipelineState(mainPSO);
-        cmdList->ExecuteIndirect(m_commandSignature.Get(), m_mainIndirectCount, m_mainIndirectBuffer.Get(), 0, nullptr, 0);
+        cmdList->ExecuteIndirect(
+            m_commandSignature.Get(),
+            m_mainIndirectCount,
+            params.mainVisibleCommandsBuffer,
+            0, 
+            params.mainCounterBuffer,
+            0
+        );
     }
-    if (m_vaseIndirectCount > 0) {
+
+    if (params.vaseVisibleCommandsBuffer && m_vaseIndirectCount > 0) {
         cmdList->SetPipelineState(vasePSO);
-        cmdList->ExecuteIndirect(m_commandSignature.Get(), m_vaseIndirectCount, m_vaseIndirectBuffer.Get(), 0, nullptr, 0);
+        cmdList->ExecuteIndirect(
+            m_commandSignature.Get(),
+            m_vaseIndirectCount,
+            params.vaseVisibleCommandsBuffer,
+            0,
+            params.vaseCounterBuffer,
+            0
+        );
     }
 } // SubmitIndirect
 
@@ -194,6 +124,34 @@ D3D12_GPU_DESCRIPTOR_HANDLE Sponza::GetInstanceDataGPUHandle() const {
 UINT Sponza::GetVisibleCount() const {
     return m_mainIndirectCount + m_vaseIndirectCount;
 } // GetVisibleCount
+
+ID3D12Resource* Sponza::GetMainIndirectBuffer() const {
+    return m_mainIndirectBuffer.Get();
+} // GetMainIndirectBuffer
+
+ID3D12Resource* Sponza::GetVaseIndirectBuffer() const {
+    return m_vaseIndirectBuffer.Get();
+} // GetVaseIndirectBuffer
+
+ID3D12Resource* Sponza::GetInstanceDataBuffer() const {
+    return m_instanceDataBuffer.Get();
+} // GetInstanceDataBuffer
+
+UINT Sponza::GetMainIndirectCount() const {
+    return m_mainIndirectCount;
+} // GetMainIndirectCount
+
+UINT Sponza::GetVaseIndirectCount() const {
+    return m_vaseIndirectCount;
+} // GetVaseIndirectCount
+
+UINT Sponza::GetInstanceDataDescriptorIndex() const {
+    return m_instanceDataDescriptorIndex;
+} // GetInstanceDataDescriptorIndex
+
+UINT Sponza::GetMasterIndirectDescriptorIndex() const {
+    return m_masterIndirectDescriptorIndex;
+} // GetMasterIndirectDescriptorIndex
 
 void Sponza::OnGUI() {
     ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Sponza Options ]");
@@ -255,11 +213,15 @@ bool Sponza::BuildInstanceDataBuffer(ID3D12Device* device) {
     instanceDataArray.reserve(m_meshes.size());
 
     for (const auto& mesh : m_meshes) {
-        if (!mesh) continue;
+        if (!mesh) {
+            continue;
+        }
 
         GPUCommons::MeshInstanceData data{};
         data.worldMatrix = XMMatrixTranspose(m_worldMatrix);
         data.vertexBufferIndex = mesh->GetVertexBufferSRVIndex();
+        data.aabbMin = mesh->GetAABBMin();
+        data.aabbMax = mesh->GetAABBMax();
 
         unsigned int matIdx = mesh->GetMaterialIndex();
         if (matIdx < m_materials.size()) {
@@ -268,8 +230,18 @@ bool Sponza::BuildInstanceDataBuffer(ID3D12Device* device) {
             data.alphaIndex = m_materials[matIdx].alpha->GetSRVIndex();
         }
 
+        bool isVase = false;
+        std::string meshName = mesh->GetName();
+        if (meshName.find("vase") != std::string::npos ||
+            meshName.find("leaf") != std::string::npos ||
+            meshName.find("Material__57") != std::string::npos) {
+            isVase = true;
+        }
+
+        data.isVase = isVase ? 1.0f : 0.0f;
+
         instanceDataArray.push_back(data);
-    }
+    } // for (const auto& mesh : m_meshes)
 
     UINT bufferSize = static_cast<UINT>(instanceDataArray.size() * sizeof(GPUCommons::MeshInstanceData));
     // Upload Heap으로 버퍼 리소스 생성
@@ -323,7 +295,7 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
     args[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
 
     D3D12_COMMAND_SIGNATURE_DESC csDesc = {};
-    csDesc.ByteStride = sizeof(IndirectCommand);
+    csDesc.ByteStride = sizeof(GPUCommons::IndirectCommand);
     csDesc.NumArgumentDescs = _countof(args);
     csDesc.pArgumentDescs = args;
 
@@ -332,7 +304,8 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
         return false;
     }
 
-    std::vector<IndirectCommand> mainCmds, vaseCmds;
+    std::vector<GPUCommons::IndirectCommand> masterCmds;
+    std::vector<GPUCommons::IndirectCommand> mainCmds, vaseCmds;
     UINT instanceIndex = 0;
 
     for (const auto& mesh : m_meshes) {
@@ -349,7 +322,7 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
             isVase = true;
         }
 
-        IndirectCommand cmd{};
+        GPUCommons::IndirectCommand cmd{};
         cmd.instanceIndex = instanceIndex;
         cmd.indexBufferView = mesh->GetIndexBufferView();
         cmd.drawArgs.IndexCountPerInstance = mesh->GetIndexCount();
@@ -358,13 +331,14 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
         cmd.drawArgs.BaseVertexLocation = 0;
         cmd.drawArgs.StartInstanceLocation = 0;
 
+        masterCmds.push_back(cmd);
         (isVase ? vaseCmds : mainCmds).push_back(cmd);
         ++instanceIndex;
     } // for (const auto& mesh : m_meshes)
 
-    auto uploadCommands = [device](const std::vector<IndirectCommand>& cmds, ComPtr<ID3D12Resource>& outBuf) -> bool {
+    auto uploadCommands = [device](const std::vector<GPUCommons::IndirectCommand>& cmds, ComPtr<ID3D12Resource>& outBuf) -> bool {
         if (cmds.empty()) return true;
-        const UINT bufSize = static_cast<UINT>(sizeof(IndirectCommand) * cmds.size());
+        const UINT bufSize = static_cast<UINT>(sizeof(GPUCommons::IndirectCommand) * cmds.size());
         CD3DX12_HEAP_PROPERTIES uploadHeapProps(D3D12_HEAP_TYPE_UPLOAD);
         CD3DX12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(bufSize);
         if (FAILED(device->CreateCommittedResource(
@@ -385,6 +359,27 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
     if (!uploadCommands(vaseCmds, m_vaseIndirectBuffer)) {
         return false;
     }
+
+    if (!uploadCommands(masterCmds, m_masterIndirectBuffer)) {
+        return false;
+    }
+
+    m_masterIndirectDescriptorIndex = m_heapAllocator->Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = DXGI_FORMAT_UNKNOWN;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDesc.Buffer.FirstElement = 0;
+    srvDesc.Buffer.NumElements = static_cast<UINT>(masterCmds.size());
+    srvDesc.Buffer.StructureByteStride = sizeof(GPUCommons::IndirectCommand); // 40바이트
+    srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+    device->CreateShaderResourceView(
+        m_masterIndirectBuffer.Get(),
+        &srvDesc,
+        m_heapAllocator->GetCPUHandle(m_masterIndirectDescriptorIndex)
+    );
+
 
     m_mainIndirectCount = static_cast<UINT>(mainCmds.size());
     m_vaseIndirectCount = static_cast<UINT>(vaseCmds.size());

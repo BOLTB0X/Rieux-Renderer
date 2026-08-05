@@ -2,8 +2,6 @@
 #include <memory>
 #include <DirectXMath.h>
 
-class Frustum;
-
 class Camera {
 public:
     Camera();
@@ -14,7 +12,6 @@ public:
     void Init(float, float, float, float);
     void Frame(float, float, float, float, float, float);
     void Update();
-    void BuildFrustum();
     void OnGUI();
 
 public:
@@ -47,7 +44,7 @@ public:
     DirectX::XMFLOAT3 GetRotation() const;
     DirectX::XMMATRIX GetViewMatrix() const;
     DirectX::XMMATRIX GetProjectionMatrix() const;
-    Frustum*          GetFrustum() const;
+    DirectX::XMMATRIX GetCullingProjectionMatrix() const;
     DirectX::XMVECTOR GetForwardVector() const;
     DirectX::XMVECTOR GetRightVector() const;
     DirectX::XMVECTOR GetUpVector() const;
@@ -56,12 +53,12 @@ private:
     void UpdateProjection();
 
 private:
-    std::unique_ptr<Frustum> m_frustum;
     DirectX::XMFLOAT3        m_position;
     DirectX::XMFLOAT3        m_rotation;
     DirectX::XMFLOAT3        m_up;
     DirectX::XMMATRIX        m_viewMatrix;
     DirectX::XMMATRIX        m_projectionMatrix;
+    DirectX::XMMATRIX        m_cullingProjectionMatrix;
     DirectX::XMVECTOR        m_forward;
     DirectX::XMVECTOR        m_right;
     DirectX::XMVECTOR        m_upVector;

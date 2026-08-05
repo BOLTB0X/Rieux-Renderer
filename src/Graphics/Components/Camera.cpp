@@ -1,6 +1,5 @@
 #include "Pch.h"
 #include "Camera.h"
-#include "Frustum.h"
 // Utils
 #include "SharedCommons.h"
 #include "MathHelper.h"
@@ -13,13 +12,13 @@ Camera::Camera()
     m_rotation(SharedCommons::DEFAULT_ROTATION),
     m_up(0.0f, 0.0f, 0.0f),
     m_fov(0.0f), m_near(0.0f), m_far(0.0f), m_aspect(0.0f) {
-    m_frustum = std::make_unique<Frustum>();
     m_maxPitch = SharedCommons::MAX_PITCH;
     m_minPitch = SharedCommons::MIN_PITCH;
     m_maxFov = SharedCommons::MAX_FOV;
     m_minFov = SharedCommons::MIN_FOV;
     m_viewMatrix = XMMatrixIdentity();
     m_projectionMatrix = XMMatrixIdentity();
+	m_cullingProjectionMatrix = XMMatrixIdentity();
     m_forward = MathHelper::FRONT;
     m_right = DirectX::XMVector3Cross(m_forward, MathHelper::UP);
     m_upVector = DirectX::XMVector3Cross(m_right, m_forward);
@@ -37,7 +36,6 @@ void Camera::Init(float fov, float aspect, float screenNear, float screenFar) {
     m_near = screenNear;
     m_far = screenFar;
 
-    m_frustum->Init(screenFar);
     UpdateProjection();
     Update();
 
@@ -46,7 +44,9 @@ void Camera::Init(float fov, float aspect, float screenNear, float screenFar) {
 
 void Camera::UpdateProjection() {
     float fovRadian = XMConvertToRadians(m_fov);
-    m_projectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_near, m_far);
+    m_projectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_far, m_near);
+    m_cullingProjectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_near, m_far);
+    //m_projectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_near, m_far);
 } // UpdateProjection
 
 void Camera::Frame(float moveForward, float moveRight, float moveUp, float rotationDeltaX, float rotationDeltaY, float zoomDelta) {
@@ -93,14 +93,7 @@ void Camera::Update() {
     m_viewMatrix = XMMatrixLookAtLH(pos, lookAt, m_upVector);
     UpdateProjection();
     // 절두체 업데이트
-    BuildFrustum();
-} // Animate
-
-void Camera::BuildFrustum() {
-    if (m_frustum) {
-        m_frustum->BuildFrustum(m_viewMatrix, m_projectionMatrix);
-    }
-} // BuildFrustum
+} // Update
 
 void Camera::OnGUI() {
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
@@ -209,7 +202,7 @@ XMFLOAT3 Camera::GetPosition() const { return m_position; }
 XMFLOAT3 Camera::GetRotation() const { return m_rotation; }
 XMMATRIX Camera::GetViewMatrix() const { return m_viewMatrix; }
 XMMATRIX Camera::GetProjectionMatrix() const { return m_projectionMatrix; }
-Frustum* Camera::GetFrustum() const { return m_frustum.get(); }
+XMMATRIX Camera::GetCullingProjectionMatrix() const { return m_cullingProjectionMatrix; }
 
 float Camera::GetFov() const { return m_fov; }
 float Camera::GetNear() const { return m_near; }

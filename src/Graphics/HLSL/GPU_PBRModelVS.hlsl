@@ -17,7 +17,15 @@ struct MeshInstanceData
     uint albedoIndex;
     uint normalIndex;
     uint alphaIndex;
-}; // MeshInstanceData
+
+    float3 aabbMin;
+    float mPadding1;
+    float3 aabbMax;
+    float mPadding2;
+
+    float isVase;
+    float3 mPadding3;
+}; //
 
 StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
 StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);

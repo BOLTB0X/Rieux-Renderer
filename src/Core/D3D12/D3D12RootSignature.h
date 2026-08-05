@@ -13,6 +13,7 @@ public:
         Builder& AddConstants(const std::string&, UINT, UINT, D3D12_SHADER_VISIBILITY);
         Builder& AddSRV(const std::string&, UINT, UINT registerSpace = 0, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL);
         Builder& AddSRVTable(const std::string&, UINT, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_PIXEL, UINT numDescriptors = 1, UINT registerSpace = 0);
+        Builder& AddUAVTable(const std::string&, UINT, D3D12_SHADER_VISIBILITY visibility = D3D12_SHADER_VISIBILITY_ALL, UINT numDescriptors = 1, UINT registerSpace = 0);
         Builder& AddStaticSampler(UINT,
             D3D12_FILTER filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
             D3D12_TEXTURE_ADDRESS_MODE addressMode = D3D12_TEXTURE_ADDRESS_MODE_WRAP,
@@ -33,7 +34,7 @@ public:
     struct InitParams {
         ID3D12Device* device = nullptr;
         Builder       builder;
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     D3D12RootSignature() = default;

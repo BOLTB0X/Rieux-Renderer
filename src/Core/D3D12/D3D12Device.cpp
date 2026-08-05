@@ -22,6 +22,15 @@ bool D3D12Device::Init() {
         return false;
     }
 
+#if defined(_DEBUG)
+    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings> pDredSettings;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&pDredSettings))))
+    {
+        pDredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        pDredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    }
+#endif
+
     ComPtr<IDXGIAdapter1> adapter1;
     for (UINT adapterIndex = 0; DXGI_ERROR_NOT_FOUND != factory->EnumAdapters1(adapterIndex, &adapter1); ++adapterIndex) {
         DXGI_ADAPTER_DESC1 desc;

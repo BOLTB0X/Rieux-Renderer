@@ -15,7 +15,7 @@ public:
 
         InitParams() : adapter(nullptr), device(nullptr), commandQueue(nullptr), maxQueries(64) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     GPUMonitor();

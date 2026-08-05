@@ -26,7 +26,7 @@ public:
             : device(nullptr), rtvAllocator(nullptr), dsvAllocator(nullptr), sharedDescriptorAllocator(nullptr),
             width(0), height(0), format(DXGI_FORMAT_R16G16B16A16_FLOAT), type(RenderTextureType::Normal) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     RenderTexture();

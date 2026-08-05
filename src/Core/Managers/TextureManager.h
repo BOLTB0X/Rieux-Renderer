@@ -20,7 +20,7 @@ public:
 
         InitParams() : device(nullptr), commandQueue(nullptr), sharedDescriptorAllocator(nullptr), hwnd(nullptr) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     TextureManager();

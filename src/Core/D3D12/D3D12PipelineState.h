@@ -4,7 +4,7 @@
 
 class D3D12PipelineState {
 public:
-    struct InitParams {
+    struct DefaultInitParams {
         ID3D12Device*                 device;
         ID3D12RootSignature*          rootSignature;
         D3D12_INPUT_LAYOUT_DESC       inputLayout;
@@ -20,8 +20,15 @@ public:
         DXGI_FORMAT                   rtvFormats[8];
         DXGI_FORMAT                   dsvFormat;
         D3D12_PRIMITIVE_TOPOLOGY_TYPE topologyType;
-        InitParams();
-    }; // InitParams
+        DefaultInitParams();
+    }; // DefaultInitParams
+
+    struct ComputeInitParams {
+        ID3D12Device*                 device;
+        ID3D12RootSignature*          rootSignature;
+        D3D12_SHADER_BYTECODE         computeShader;
+        ComputeInitParams();
+	}; // ComputeInitParams
 
 public:
     D3D12PipelineState() = default;
@@ -29,7 +36,8 @@ public:
     D3D12PipelineState& operator=(const D3D12PipelineState&) = delete;
     ~D3D12PipelineState() = default;
 
-    bool Init(const InitParams&);
+    bool Init(const DefaultInitParams&);
+	bool InitCompute(const ComputeInitParams&);
 
     ID3D12PipelineState* GetPSO() const;
 

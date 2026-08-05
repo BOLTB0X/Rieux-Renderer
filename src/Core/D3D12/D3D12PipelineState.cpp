@@ -5,7 +5,7 @@
 
 using namespace Microsoft::WRL;
 
-D3D12PipelineState::InitParams::InitParams()
+D3D12PipelineState::DefaultInitParams::DefaultInitParams()
     : device(nullptr),
     rootSignature(nullptr),
     inputLayout{},
@@ -23,9 +23,15 @@ D3D12PipelineState::InitParams::InitParams()
     depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
     depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
     rasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
-} // InitParams
+} // DefaultInitParams
 
-bool D3D12PipelineState::Init(const InitParams& params) {
+D3D12PipelineState::ComputeInitParams::ComputeInitParams()
+    : device(nullptr),
+    rootSignature(nullptr),
+    computeShader{} {
+} // ComputeInitParams
+
+bool D3D12PipelineState::Init(const DefaultInitParams& params) {
     if (!params.device || !params.rootSignature) {
         return false;
     }
@@ -58,6 +64,21 @@ bool D3D12PipelineState::Init(const InitParams& params) {
 
     return true;
 } // Init
+
+bool D3D12PipelineState::InitCompute(const ComputeInitParams& params) {
+    if (!params.device || !params.rootSignature) {
+        return false;
+    }
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = params.rootSignature;
+    psoDesc.CS = params.computeShader;
+    ComPtr<ID3D12PipelineState> pso;
+    HRESULT hr = params.device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
+    if (FAILED(hr)) {
+        return false;
+    }
+    return true;
+} // InitCompute
 
 ID3D12PipelineState* D3D12PipelineState::GetPSO() const {
     return m_pipelineState.Get();

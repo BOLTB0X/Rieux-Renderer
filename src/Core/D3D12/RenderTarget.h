@@ -18,7 +18,7 @@ public:
             : device(nullptr), sharedDescriptorAllocator(nullptr), width(0), height(0),
             colorFormat(DXGI_FORMAT_R8G8B8A8_UNORM), depthFormat(DXGI_FORMAT_D32_FLOAT) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     RenderTarget();

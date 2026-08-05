@@ -17,8 +17,7 @@ void Frustum::Init(float screenDepth) {
 	return;
 } // Init
 
-
-void Frustum::BuildFrustum(XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
+void Frustum::Frame(XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
 	XMFLOAT4X4 pMatrix, matrix;
 	float zMinimum, r, length;
 	XMMATRIX finalMatrix;
@@ -120,7 +119,11 @@ void Frustum::BuildFrustum(XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
 	m_planes[5][3] /= length;
 
 	return;
-} // BuildFrustum
+} // Frame
+
+const XMFLOAT4* Frustum::GetPlanes() const {
+	return reinterpret_cast<const XMFLOAT4*>(m_planes);
+} // GetPlanes
 
 bool Frustum::CheckPoint(float x, float y, float z) {
 	for (unsigned int i = 0; i < 6; i++) {

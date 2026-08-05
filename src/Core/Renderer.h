@@ -18,6 +18,8 @@ class RenderTarget;
 class PSOManager;
 class RenderQueue;
 class Camera;
+//class Frustum;
+class FrustumCuller;
 class DirectionalLight;
 class GPUMonitor;
 class TextureManager;
@@ -35,7 +37,7 @@ public:
 
         InitParams() : hwnd(nullptr), imGuiManager(nullptr) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
     struct FrameParams {
         int         fps;
@@ -96,6 +98,8 @@ private:
     std::unique_ptr<RendererState>           m_RendererState;
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_Camera;
+    //std::unique_ptr<Frustum>                 m_Frustum;
+    std::unique_ptr<FrustumCuller>           m_FrustumCuller;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;

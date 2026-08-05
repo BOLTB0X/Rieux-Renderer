@@ -16,7 +16,7 @@ public:
 
         InitParams() : hwnd(nullptr), device(nullptr), commandQueue(nullptr), width(0), height(0), frameCount(2) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     D3D12SwapChain();

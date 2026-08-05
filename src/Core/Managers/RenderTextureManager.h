@@ -19,7 +19,7 @@ public:
 
         InitParams() : device(nullptr), sharedDescriptorAllocator(nullptr), rtvCapacity(64), dsvCapacity(16) {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     RenderTextureManager();

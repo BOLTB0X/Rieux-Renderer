@@ -22,7 +22,7 @@ PSOManager::~PSOManager() {
 
 PSOManager::InitParams::InitParams()
     : device(nullptr), rtvFormat(DXGI_FORMAT_R8G8B8A8_UNORM), dsvFormat(DXGI_FORMAT_D24_UNORM_S8_UINT) {
-} // InitParams
+} // InitDefaultParams
 
 bool PSOManager::Init(const InitParams& params) {
     m_device = params.device;
@@ -33,6 +33,11 @@ bool PSOManager::Init(const InitParams& params) {
         DebugHelper::DebugPrint("Sponza 메인 PSO 빌드 실패");
         return false;
     }
+
+    if (!BuildCullingComputePSO(SharedCommons::KEY_CULLING_SIG, SharedCommons::CULLING_CS)) {
+        DebugHelper::DebugPrint("CULLING_CS PSO 빌드 실패");
+        return false;
+	}
 
     return true;
 } // Init
@@ -125,7 +130,7 @@ bool PSOManager::BuildDefaultSponzaPSO(const std::string& signatureKey) {
         { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
     };
 
-    D3D12PipelineState::InitParams baseParams;
+    D3D12PipelineState::DefaultInitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;
     baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
@@ -189,7 +194,7 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::GPU_SPONZA_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::GPU_SPONZA_PS_STR] = psBlob;
 
-    D3D12PipelineState::InitParams baseParams;
+    D3D12PipelineState::DefaultInitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;
     baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
@@ -201,7 +206,7 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     baseParams.depthStencilState.DepthEnable = TRUE;
     baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
 
     bool result = true;
 
@@ -217,7 +222,57 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
     return result;
 } // BuildGPUDrivenPSO
 
-bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::InitParams params) {
+bool PSOManager::BuildCullingComputePSO(const std::string& signatureKey, const std::wstring& shaderPath) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("FrustumPlanes", 0, D3D12_SHADER_VISIBILITY_ALL)          // b0
+            .AddSRVTable("MasterInstance", 0, D3D12_SHADER_VISIBILITY_ALL)    // t0
+            .AddSRVTable("MasterCommands", 1, D3D12_SHADER_VISIBILITY_ALL)    // t1
+            .AddUAVTable("VisibleMainCommands", 0, D3D12_SHADER_VISIBILITY_ALL) // u0
+            .AddUAVTable("VisibleVaseCommands", 1, D3D12_SHADER_VISIBILITY_ALL) // u1
+            .AddUAVTable("MainCount", 2, D3D12_SHADER_VISIBILITY_ALL)           // u2
+            .AddUAVTable("VaseCount", 3, D3D12_SHADER_VISIBILITY_ALL);          // u3
+        })) {
+        return false;
+    }
+
+    RendererState::CullingFrustumPlanesIndex = GetRootParamIndex(signatureKey, "FrustumPlanes");
+    RendererState::CullingMasterInstanceIndex = GetRootParamIndex(signatureKey, "MasterInstance");
+    RendererState::CullingMasterCommandsIndex = GetRootParamIndex(signatureKey, "MasterCommands");
+    RendererState::CullingVisibleMainCommandsIndex = GetRootParamIndex(signatureKey, "VisibleMainCommands");
+    RendererState::CullingVisibleVaseCommandsIndex = GetRootParamIndex(signatureKey, "VisibleVaseCommands");
+    RendererState::CullingMainCountIndex = GetRootParamIndex(signatureKey, "MainCount");
+    RendererState::CullingVaseCountIndex = GetRootParamIndex(signatureKey, "VaseCount");
+
+    ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패: " + signatureKey);
+        return false;
+    }
+
+    // Compute Shader 컴파일/로드
+    ComPtr<IDxcBlob> csBlob;
+    if (!ShaderHelper::InitComputeShader(shaderPath, csBlob.GetAddressOf())) {
+        return false;
+    }
+    m_shaderBlobs[SharedCommons::CULLING_CS_STR] = csBlob;
+
+    // Compute PSO 생성
+    D3D12PipelineState::ComputeInitParams computeParams;
+    computeParams.device = m_device;
+    computeParams.rootSignature = rootSignature;
+    computeParams.computeShader = CD3DX12_SHADER_BYTECODE(csBlob->GetBufferPointer(), csBlob->GetBufferSize());
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->InitCompute(computeParams)) {
+        DebugHelper::DebugPrint("Culling Compute PSO Init 실패");
+        return false;
+    }
+
+    m_psoMap[SharedCommons::KEY_CULLING_CS] = std::move(pso);
+    return true;
+} // BuildCullingComputePSO
+
+bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     params.rasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 
@@ -228,7 +283,7 @@ bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineSta
     return true;
 } // BuildSolidCullBack
 
-bool PSOManager::BuildSolidCullNone(const std::string& psoName, D3D12PipelineState::InitParams params) {
+bool PSOManager::BuildSolidCullNone(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     params.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
@@ -239,7 +294,7 @@ bool PSOManager::BuildSolidCullNone(const std::string& psoName, D3D12PipelineSta
     return true;
 } // BuildSolidCullNone
 
-bool PSOManager::BuildWireframeCullBack(const std::string& psoName, D3D12PipelineState::InitParams params) {
+bool PSOManager::BuildWireframeCullBack(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
     params.rasterizerState.CullMode = D3D12_CULL_MODE_BACK;
 
@@ -250,7 +305,7 @@ bool PSOManager::BuildWireframeCullBack(const std::string& psoName, D3D12Pipelin
     return true;
 } // BuildWireframeCullBack
 
-bool PSOManager::BuildWireframeCullNone(const std::string& psoName, D3D12PipelineState::InitParams params) {
+bool PSOManager::BuildWireframeCullNone(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
     params.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
