@@ -53,7 +53,7 @@ cbuffer FrustumCullingCB : register(b0)
 #define TOTAL_INSTANCES totalInstances
 
 // AABB와 프러스텀 교차 판정 함수
-bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, float4 planes[6])
+bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, matrix world, float4 planes[6])
 {
     // 상자의 8개 꼭짓점을 명시적으로 생성
     float3 corners[8] =
@@ -67,6 +67,12 @@ bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, float4 planes[6])
         float3(aabbMin.x, aabbMax.y, aabbMax.z), // min, max, max
         float3(aabbMax.x, aabbMax.y, aabbMax.z) // max, max, max
     };
+    
+    [unroll]
+    for (int k = 0; k < 8; ++k)
+    {
+        corners[k] = mul(float4(corners[k], 1.0f), world).xyz;
+    }
 
     [unroll]
     for (int i = 0; i < 6; ++i)

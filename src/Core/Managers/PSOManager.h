@@ -40,6 +40,7 @@ private:
     bool BuildDefaultSponzaPSO(const std::string&);
     bool BuildGPUDrivenPSO(const std::string&);
     bool BuildCullingComputePSO(const std::string&, const std::wstring&);
+    bool BuildDepthRecordPSO(const std::string&);
 
     bool BuildSolidCullBack(const std::string&, D3D12PipelineState::DefaultInitParams);
     bool BuildSolidCullNone(const std::string&, D3D12PipelineState::DefaultInitParams);

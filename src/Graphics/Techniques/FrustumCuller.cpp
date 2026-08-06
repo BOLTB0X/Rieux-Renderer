@@ -139,24 +139,6 @@ void FrustumCuller::ReadbackToCPU(ID3D12GraphicsCommandList* cmdList) {
     cmdList->ResourceBarrier(2, back);
 } // ReadbackToCPU
 
-void FrustumCuller::OnGUI() {
-    UINT* pMain = nullptr;
-    if (SUCCEEDED(m_mainReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMain)))) {
-        m_cachedMainVisibleCount = *pMain;
-        m_mainReadbackBuffer->Unmap(0, nullptr);
-    }
-    UINT* pVase = nullptr;
-    if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVase)))) {
-        m_cachedVaseVisibleCount = *pVase;
-        m_vaseReadbackBuffer->Unmap(0, nullptr);
-    }
-
-    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ FrustumCuller Options ]");
-    ImGui::Text("Main Visible: %u", m_cachedMainVisibleCount);
-    ImGui::Text("Vase Visible: %u", m_cachedVaseVisibleCount);
-    ImGui::Separator();
-} // OnGUI
-
 Frustum*        FrustumCuller::GetFrustum() const { return m_frustum.get(); }
 ID3D12Resource* FrustumCuller::GetMainVisibleCommandsBuffer() const { return m_mainVisibleCommandsBuffer.Get(); }
 ID3D12Resource* FrustumCuller::GetVaseVisibleCommandsBuffer() const { return m_vaseVisibleCommandsBuffer.Get(); }
@@ -239,3 +221,21 @@ void FrustumCuller::BuildBuffers(ID3D12Device* device) {
     device->CreateCommittedResource(&readbackHeap, D3D12_HEAP_FLAG_NONE, &readbackDesc,
         D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_vaseReadbackBuffer));
 } // BuildBuffers
+
+void FrustumCuller::OnGUI() {
+    UINT* pMain = nullptr;
+    if (SUCCEEDED(m_mainReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMain)))) {
+        m_cachedMainVisibleCount = *pMain;
+        m_mainReadbackBuffer->Unmap(0, nullptr);
+    }
+    UINT* pVase = nullptr;
+    if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVase)))) {
+        m_cachedVaseVisibleCount = *pVase;
+        m_vaseReadbackBuffer->Unmap(0, nullptr);
+    }
+
+    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ FrustumCuller Options ]");
+    ImGui::Text("Main Visible: %u", m_cachedMainVisibleCount);
+    ImGui::Text("Vase Visible: %u", m_cachedVaseVisibleCount);
+    ImGui::Separator();
+} // OnGUI

@@ -17,7 +17,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     
     MeshInstanceData instance = g_MasterInstanceData[meshIndex];
     
-    bool visible = Check_Box_Visible(instance.aabbMin, instance.aabbMax, FRUSTUM_PLANES);
+    bool visible = Check_Box_Visible(instance.aabbMin, instance.aabbMax, instance.worldMatrix, FRUSTUM_PLANES);
     if (!visible)
         return;
 

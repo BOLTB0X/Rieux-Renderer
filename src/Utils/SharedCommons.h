@@ -56,7 +56,7 @@ namespace SharedCommons {
     static const std::wstring DEBUG_LINE_PS = L"HLSL/DebugLinePS.hlsl";
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
-    static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";
+    static const std::wstring CPU_SPONZA_PS = L"HLSL/CPU_SponzaPS.hlsl";
     static const std::wstring SPONZA_FLAT_PS = L"HLSL/FlatSponzaPS.hlsl";
 
     static const std::string  CPU_SPONZA_VS_STR = "CPUSponzaVS";
@@ -70,6 +70,12 @@ namespace SharedCommons {
 
     static const std::wstring CULLING_CS = L"HLSL/FrustumCullingCS.hlsl";
     static const std::string  CULLING_CS_STR = "FrustumCullingCS";
+
+    static const std::wstring DEPTH_VS = L"HLSL/DepthVS.hlsl";
+    static const std::wstring DEPTH_PS = L"HLSL/DepthPS.hlsl";
+
+    static const std::string  DEPTH_VS_STR = "DepthVS";
+    static const std::string  DEPTH_PS_STR = "DepthPS";
 } // HLSL
 
 namespace SharedCommons {
@@ -94,6 +100,11 @@ namespace SharedCommons {
 
     static const std::string  KEY_CULLING_CS = "FrustumCullingCS";
     static const std::string  KEY_CULLING_SIG = "FrustumCullingCS_SIG";
+
+    static const std::string  DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
+    static const std::string  KEY_GPU_DEPTH_SOLID_CULL = "GPU_DEPTH_SOLID_CULL";
+    static const std::string  KEY_GPU_DEPTH_ALPHA_NO_CULL = "GPU_DEPTH_ALPHA_NO_CULL";
+    static const std::string  KEY_DEPTH_RECORD_SIG = "DepthRecord_SIG";
 
 } // MAP - KEY
 

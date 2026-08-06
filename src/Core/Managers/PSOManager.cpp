@@ -39,6 +39,11 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
 	}
 
+    if (!BuildDepthRecordPSO(SharedCommons::KEY_DEPTH_RECORD_SIG)) {
+        DebugHelper::DebugPrint("Depth Record PSO 빌드 실패");
+        return false;
+	}
+
     return true;
 } // Init
 
@@ -54,7 +59,6 @@ D3D12PipelineState* PSOManager::GetPSO(const std::string& name) const {
     }
     return nullptr;
 } // GetPSO
-
 
 ID3D12RootSignature* PSOManager::GetRootSignature(const std::string& name) const {
     auto it = m_rootSignatureMap.find(name);
@@ -115,7 +119,7 @@ bool PSOManager::BuildDefaultSponzaPSO(const std::string& signatureKey) {
     ComPtr<IDxcBlob> psBlob;
 
     if (!ShaderHelper::InitVertexShader(SharedCommons::PBR_VS, vsBlob.GetAddressOf()) ||
-        !ShaderHelper::InitPixelShader(SharedCommons::SPONZA_PS, psBlob.GetAddressOf())) {
+        !ShaderHelper::InitPixelShader(SharedCommons::CPU_SPONZA_PS, psBlob.GetAddressOf())) {
         return false;
     }
 
@@ -224,9 +228,9 @@ bool PSOManager::BuildGPUDrivenPSO(const std::string& signatureKey) {
 
 bool PSOManager::BuildCullingComputePSO(const std::string& signatureKey, const std::wstring& shaderPath) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
-        b.AddCBV("FrustumPlanes", 0, D3D12_SHADER_VISIBILITY_ALL)          // b0
-            .AddSRVTable("MasterInstance", 0, D3D12_SHADER_VISIBILITY_ALL)    // t0
-            .AddSRVTable("MasterCommands", 1, D3D12_SHADER_VISIBILITY_ALL)    // t1
+        b.AddCBV("FrustumPlanes", 0, D3D12_SHADER_VISIBILITY_ALL)               // b0
+            .AddSRVTable("MasterInstance", 0, D3D12_SHADER_VISIBILITY_ALL)      // t0
+            .AddSRVTable("MasterCommands", 1, D3D12_SHADER_VISIBILITY_ALL)      // t1
             .AddUAVTable("VisibleMainCommands", 0, D3D12_SHADER_VISIBILITY_ALL) // u0
             .AddUAVTable("VisibleVaseCommands", 1, D3D12_SHADER_VISIBILITY_ALL) // u1
             .AddUAVTable("MainCount", 2, D3D12_SHADER_VISIBILITY_ALL)           // u2
@@ -271,6 +275,79 @@ bool PSOManager::BuildCullingComputePSO(const std::string& signatureKey, const s
     m_psoMap[SharedCommons::KEY_CULLING_CS] = std::move(pso);
     return true;
 } // BuildCullingComputePSO
+
+bool PSOManager::BuildDepthRecordPSO(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)                            // b0, space0
+            .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_ALL)                         // b1, space0
+            .AddConstants("InstanceIndex", 2, 1, D3D12_SHADER_VISIBILITY_ALL)          // b2, space0 
+            .AddSRVTable("InstanceData", 1, D3D12_SHADER_VISIBILITY_ALL, 1, 0)         // t1, space0
+            .AddSRVTable("BindlessTextures", 0, D3D12_SHADER_VISIBILITY_PIXEL, -1, 1)  // t0, space1
+            .AddSRVTable("BindlessBuffers", 0, D3D12_SHADER_VISIBILITY_VERTEX, -1, 2)  // t0, space2
+            .AddStaticSampler(RendererState::StaticSamplerIndex);
+        })) {
+        return false;
+    }
+
+    RendererState::FrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
+    RendererState::LightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
+    RendererState::InstanceIndexParam = GetRootParamIndex(signatureKey, "InstanceIndex");
+    RendererState::InstanceDataIndex = GetRootParamIndex(signatureKey, "InstanceData");
+    RendererState::BindlessTexIndex = GetRootParamIndex(signatureKey, "BindlessTextures");
+    RendererState::BindlessBufIndex = GetRootParamIndex(signatureKey, "BindlessBuffers");
+
+    ID3D12RootSignature* rootSignature = GetRootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (DepthRecord PSO): " + signatureKey);
+        return false;
+    }
+
+    // Depth 전용 셰이더 로드
+    ComPtr<IDxcBlob> vsBlob;
+    ComPtr<IDxcBlob> psBlob;
+
+    if (!ShaderHelper::InitVertexShader(SharedCommons::DEPTH_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::DEPTH_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::DEPTH_VS_STR] = vsBlob;
+    m_shaderBlobs[SharedCommons::DEPTH_PS_STR] = psBlob;
+
+    // Base PSO 파라미터 세팅 (렌더 타깃 비활성화)
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.inputLayout = { nullptr, 0 };
+
+    // 핵심: Depth 전용이므로 Color RTV 0개로 설정
+    baseParams.numRenderTargets = 0;
+    baseParams.rtvFormats[0] = DXGI_FORMAT_UNKNOWN;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+    // Reverse-Z 설정
+    baseParams.depthStencilState.DepthEnable = TRUE;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+
+    bool result = true;
+
+    // Solid 메쉬용
+    baseParams.pixelShader = { nullptr, 0 };
+    result &= BuildSolidCullBack(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL, baseParams);
+
+    // 투명 메쉬용
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    result &= BuildSolidCullNone(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL, baseParams);
+
+    if (!result) {
+        DebugHelper::DebugPrint("GPU DepthRecord PSO 변형 초기화 실패");
+    }
+
+    return result;
+} // BuildDepthRecordPSO
 
 bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;

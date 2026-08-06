@@ -4,9 +4,8 @@
 #include <DirectXMath.h>
 #include <wrl/client.h>
 #include <d3d12.h>
-
-class Frustum;
-class FrustumCuller;
+// Components
+#include "Transform.h"
 
 class Sponza : public AssimpModel {
 public:
@@ -42,7 +41,13 @@ public:
 
     bool                        Init(const InitParams&);
     void                        SubmitIndirect(const SubmitIndirectParams&);
-    const DirectX::XMMATRIX&    GetWorldMatrix() const;
+    void                        OnGUI();
+
+public:
+    void                        SetPosition(const DirectX::XMFLOAT3&);
+    void                        SetPosition(float, float, float);
+
+    DirectX::XMMATRIX&          GetWorldMatrix();
     D3D12_GPU_DESCRIPTOR_HANDLE GetInstanceDataGPUHandle() const;
     UINT                        GetMasterIndirectDescriptorIndex() const;
     ID3D12Resource*             GetMainIndirectBuffer() const;
@@ -52,11 +57,10 @@ public:
     UINT                        GetVaseIndirectCount() const;
     UINT                        GetVisibleCount() const;
     UINT                        GetInstanceDataDescriptorIndex() const;
-    void                        OnGUI();
 
 private:
-    bool BuildInstanceDataBuffer(ID3D12Device*);
-    bool BuildIndirectBuffers(ID3D12Device*, ID3D12RootSignature*);
+    bool BuildInstanceDataBuffer(ID3D12Device*, const int, const float, bool);
+    bool BuildIndirectBuffers(ID3D12Device*, ID3D12RootSignature*, const int);
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_instanceDataBuffer;
@@ -66,7 +70,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_vaseIndirectBuffer;
 
     D3D12_VERTEX_BUFFER_VIEW                       m_instanceDataSRV;
-    DirectX::XMMATRIX                              m_worldMatrix;
     ID3D12RootSignature*                           m_rootSignature;
     ID3D12PipelineState*                           m_psoSolidCull;
     ID3D12PipelineState*                           m_psoSolidNoCull;
@@ -79,4 +82,5 @@ private:
     UINT                                           m_mainIndirectCount;
     UINT                                           m_vaseIndirectCount;
     bool                                           m_freezeCulling;
+    Transform                                      m_Transform;
 }; // Sponza

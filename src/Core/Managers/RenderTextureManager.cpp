@@ -4,6 +4,7 @@
 #include "DescriptorHeapAllocator.h"
 // Utils
 #include "DebugHelper.h"
+#include "SharedCommons.h"
 
 using namespace DebugHelper;
 
@@ -35,6 +36,25 @@ bool RenderTextureManager::Init(const InitParams& params) {
         DebugPrint("RenderTextureManager - DSV 풀 생성 실패");
         return false;
     }
+
+    auto m_depthTex = std::make_shared<RenderTexture>();
+
+    RenderTexture::InitParams texParams;
+    texParams.device = m_device;
+    texParams.rtvAllocator = m_rtvAllocator.get();
+    texParams.dsvAllocator = m_dsvAllocator.get();
+    texParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator;
+    texParams.width = SharedCommons::SCREEN_WIDTH;
+    texParams.height = SharedCommons::SCREEN_HEIGHT;
+    texParams.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    texParams.type = RenderTexture::RenderTextureType::Depth;
+
+    if (!m_depthTex->Init(texParams)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::DEPTH_RENDER_TEXTURE);
+        return nullptr;
+    }
+
+    m_renderTextures[SharedCommons::DEPTH_RENDER_TEXTURE] = m_depthTex;
 
     return true;
 } // Init

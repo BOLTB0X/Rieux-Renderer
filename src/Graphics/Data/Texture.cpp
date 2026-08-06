@@ -1,7 +1,8 @@
 #include "Pch.h"
 #include "Texture.h"
 #include "Tool/TextureLoader.h"
-#include "Components/DescriptorHeapAllocator.h"
+// Tools
+#include "DescriptorHeapAllocator.h"
 // Utils
 #include "DebugHelper.h"
 // STL

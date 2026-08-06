@@ -13,15 +13,18 @@
 #include "TextureManager.h"
 #include "PSOManager.h"
 #include "ImGuiManager.h"
-// Components
+// Graphics/Tools
 #include "DescriptorHeapAllocator.h"
+// Components
 #include "RenderQueue.h"
 #include "Camera.h"
-#include "FrustumCuller.h"
 #include "DirectionalLight.h"
 #include "GPUMonitor.h"
+// Techniques
+#include "FrustumCuller.h"
+#include "DepthRecorder.h"
 // World
-#include "World/Sponza.h"
+#include "Sponza.h"
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
@@ -46,6 +49,7 @@ Renderer::Renderer()
     m_RenderQueue = std::make_unique<RenderQueue>();
     m_Camera = std::make_unique<Camera>();
     m_FrustumCuller = std::make_unique<FrustumCuller>();
+	m_DepthRecorder = std::make_unique<DepthRecorder>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -94,6 +98,7 @@ void Renderer::Shutdown() {
     m_ImGuiManager.reset();
 
     // LoadAssets 역순 해제
+	m_DepthRecorder.reset();
 	m_FrustumCuller.reset();
     m_Sponza.reset();
     m_TextureManager.reset();
@@ -310,6 +315,12 @@ bool Renderer::LoadAssets(HWND hwnd) {
         DebugHelper::DebugPrint("m_FrustumCuller 초기화 실패");
         return false;
     }
+
+	DepthRecorder::InitParams depthInit;
+	depthInit.device = m_D3D12Device->GetDevice();
+	depthInit.rootSignature = m_PSOManager->GetRootSignature(SharedCommons::KEY_DEPTH_RECORD_SIG);
+	depthInit.solidDepthPSO = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL);
+	depthInit.alphaDepthPSO = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL);
 
     return true;
 } // LoadAssets

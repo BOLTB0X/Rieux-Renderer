@@ -13,27 +13,28 @@ struct PBRVertex
 struct MeshInstanceData
 {
     matrix worldMatrix;
-    uint vertexBufferIndex;
-    uint albedoIndex;
-    uint normalIndex;
-    uint alphaIndex;
+    uint   vertexBufferIndex;
+    uint   albedoIndex;
+    uint   normalIndex;
+    uint   alphaIndex;
 
     float3 aabbMin;
-    float mPadding1;
+    float  mPadding1;
     float3 aabbMax;
-    float mPadding2;
+    float  mPadding2;
 
-    float isVase;
+    float  isVase;
     float3 mPadding3;
-}; //
+}; // MeshInstanceData
 
-StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
-StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
-
-cbuffer InstanceCB : register(b2)
+struct InstanceIndex
 {
     uint InstanceIndex;
 }; // InstanceCB
+
+StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
+ConstantBuffer<InstanceIndex>      g_InstanceCB : register(b2);
 
 struct VS_OUT
 {
@@ -47,7 +48,7 @@ struct VS_OUT
 
 VS_OUT main(uint vertexID : SV_VertexID)
 {
-    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    MeshInstanceData inst = g_InstanceData[g_InstanceCB.InstanceIndex];
     PBRVertex input = g_VertexBuffers[inst.vertexBufferIndex][vertexID];
     
     VS_OUT output;
