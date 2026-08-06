@@ -87,7 +87,6 @@ bool RenderTarget::Init(const InitParams& params) {
     D3D12_CLEAR_VALUE depthClear = {};
     depthClear.Format = params.depthFormat;
     depthClear.DepthStencil.Depth = 0.0f;
-    //depthClear.DepthStencil.Depth = 1.0f;
     depthClear.DepthStencil.Stencil = 0;
 
     if (FAILED(params.device->CreateCommittedResource(
