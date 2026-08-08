@@ -1,6 +1,7 @@
 #pragma once
 #include <d3d12.h>
 #include <wrl/client.h>
+#include <vector>
 
 class DescriptorHeapAllocator;
 
@@ -19,12 +20,13 @@ public:
         DescriptorHeapAllocator* sharedDescriptorAllocator;
         UINT                     width;
         UINT                     height;
+        UINT                     mipLevels;
         DXGI_FORMAT              format;
         RenderTextureType        type;
 
         InitParams()
             : device(nullptr), rtvAllocator(nullptr), dsvAllocator(nullptr), sharedDescriptorAllocator(nullptr),
-            width(0), height(0), format(DXGI_FORMAT_R16G16B16A16_FLOAT), type(RenderTextureType::Normal) {
+            width(0), height(0), mipLevels(1), format(DXGI_FORMAT_R16G16B16A16_FLOAT), type(RenderTextureType::Normal) {
         }
     }; // InitDefaultParams
 
@@ -39,6 +41,8 @@ public:
     void ClearDepth(ID3D12GraphicsCommandList*, float depth = 1.0f, UINT8 stencil = 0);
 
 public:
+    void                        SetCurrentStateWithoutBarrier(D3D12_RESOURCE_STATES);
+    RenderTextureType           GetType() const;
     ID3D12Resource*             GetResource() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const;
@@ -46,6 +50,9 @@ public:
     UINT                        GetUAVIndex() const;
     UINT                        GetWidth() const;
     UINT                        GetHeight() const;
+    UINT                        GetMipLevels() const;
+    D3D12_GPU_DESCRIPTOR_HANDLE GetMipSRVGPUHandle(UINT) const;
+    D3D12_GPU_DESCRIPTOR_HANDLE GetMipUAVGPUHandle(UINT) const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
@@ -57,4 +64,8 @@ private:
     RenderTextureType                      m_type;
     UINT                                   m_width;
     UINT                                   m_height;
+    std::vector<UINT>                      m_mipSrvIndices;
+    std::vector<UINT>                      m_mipUavIndices;
+    UINT                                   m_mipLevels;
+    DescriptorHeapAllocator*               m_sharedDescriptorAllocator;
 }; // RenderTexture

@@ -1,5 +1,7 @@
 #include "Pch.h"
 #include "ImGuiManager.h"
+// Components
+#include "DescriptorHeapAllocator.h"
 // Utils
 #include "ImGuiWidget.h"
 #include "DebugHelper.h"
@@ -9,26 +11,25 @@
 #include "imgui_impl_dx12.h"
 
 ImGuiManager::ImGuiManager()
-    : m_isInitialized(false), m_isCameraLocked(false), m_showUI(true) {
+    : m_isInitialized(false), m_isCameraLocked(false), m_showUI(true), m_heapAllocator(nullptr) {
 } // ImGuiManager
 
 ImGuiManager::~ImGuiManager() {
     Shutdown();
+	m_heapAllocator = nullptr;
 } // ~ImGuiManager
 
 bool ImGuiManager::Init(const InitParams& initParams) {
+    if (!initParams.device || !initParams.hwnd || !initParams.heapAllocator) {
+        // OutputDebugStringA("ImGuiManager::Init - 잘못된 파라미터 (Null 포인터)!\n");
+        return false;
+    }
+
     if (m_isInitialized) {
         return true;
     }
 
-    D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    desc.NumDescriptors = 1;
-    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    if (FAILED(initParams.device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_srvHeap)))) {
-        DebugHelper::DebugPrint("ImGui SRV Descriptor Heap 생성 실패");
-        return false;
-    }
+	m_heapAllocator = initParams.heapAllocator;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -36,11 +37,15 @@ bool ImGuiManager::Init(const InitParams& initParams) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsDark();
 
+    UINT fontSrvIndex = m_heapAllocator->Allocate();
+    D3D12_CPU_DESCRIPTOR_HANDLE fontCpuHandle = m_heapAllocator->GetCPUHandle(fontSrvIndex);
+    D3D12_GPU_DESCRIPTOR_HANDLE fontGpuHandle = m_heapAllocator->GetGPUHandle(fontSrvIndex);
+
     ImGui_ImplWin32_Init(initParams.hwnd);
     ImGui_ImplDX12_Init(initParams.device, initParams.numFramesInFlight, initParams.rtvFormat,
-        m_srvHeap.Get(),
-        m_srvHeap->GetCPUDescriptorHandleForHeapStart(),
-        m_srvHeap->GetGPUDescriptorHandleForHeapStart());
+        m_heapAllocator->GetHeap(),
+        fontCpuHandle,
+        fontGpuHandle);
 
     m_isInitialized = true;
     return true;
@@ -55,11 +60,6 @@ void ImGuiManager::Shutdown() {
         ImGui::DestroyContext();
         m_isInitialized = false;
     }
-
-    if (m_srvHeap) {
-        m_srvHeap.Reset();
-    }
-
     m_isInitialized = false;
 } // Shutdown
 
@@ -89,7 +89,7 @@ void ImGuiManager::RenderDrawData(ID3D12GraphicsCommandList* commandList) {
         return;
     }
 
-    ID3D12DescriptorHeap* heaps[] = { m_srvHeap.Get() };
+    ID3D12DescriptorHeap* heaps[] = { m_heapAllocator->GetHeap() };
     commandList->SetDescriptorHeaps(1, heaps);
 
     ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), commandList);
@@ -127,3 +127,16 @@ void ImGuiManager::SetCameraLocked(bool lock) {
 bool ImGuiManager::SetWorldClicked(bool mousePressed) const {
     return mousePressed && !ImGui::GetIO().WantCaptureMouse;
 } // SetWorldClicked
+
+D3D12_GPU_DESCRIPTOR_HANDLE ImGuiManager::RegisterTexture(ID3D12Device* device, ID3D12Resource* resource, DXGI_FORMAT srvFormat) {
+    UINT slot = m_heapAllocator->Allocate(); // ImGui 전용 힙에서 슬롯 할당
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = srvFormat;
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    device->CreateShaderResourceView(resource, &srvDesc, m_heapAllocator->GetCPUHandle(slot));
+    return m_heapAllocator->GetGPUHandle(slot);
+} // RegisterTexture

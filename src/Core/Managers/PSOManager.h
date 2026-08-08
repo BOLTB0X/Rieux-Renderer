@@ -30,17 +30,20 @@ public:
     void                 Shutdown();
 
     D3D12PipelineState*  GetPSO(const std::string&) const;
-    ID3D12RootSignature* GetRootSignature(const std::string&) const;
+    D3D12RootSignature*  GetD3D12RootSignature(const std::string&) const;
+    ID3D12RootSignature* GetID3D12RootSignature(const std::string&) const;
 
 private:
     bool CreateRootSignature(const std::string&, const std::function<void(D3D12RootSignature::Builder&)>&);
     UINT GetRootParamIndex(const std::string&, const std::string&) const;
 
 private:
-    bool BuildDefaultSponzaPSO(const std::string&);
-    bool BuildGPUDrivenPSO(const std::string&);
-    bool BuildCullingComputePSO(const std::string&, const std::wstring&);
-    bool BuildDepthRecordPSO(const std::string&);
+    bool BuildDefaultSponza(const std::string&);
+    bool BuildGPUDriven(const std::string&);
+    bool BuildCullingCompute(const std::string&, const std::wstring&);
+    bool BuildDepthRecord(const std::string&);
+	bool BuildHierarchicalZ(const std::string&);
+    bool BuildTransReverseZ(const std::string&);
 
     bool BuildSolidCullBack(const std::string&, D3D12PipelineState::DefaultInitParams);
     bool BuildSolidCullNone(const std::string&, D3D12PipelineState::DefaultInitParams);
