@@ -34,7 +34,7 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
-    if (!BuildCullingCompute(SharedCommons::KEY_CULLING_SIG, SharedCommons::CULLING_CS)) {
+    if (!BuildFrustumCullingCompute(SharedCommons::KEY_CULLING_SIG, SharedCommons::CULLING_CS)) {
         DebugHelper::DebugPrint("CULLING_CS PSO 빌드 실패");
         return false;
 	}
@@ -51,6 +51,11 @@ bool PSOManager::Init(const InitParams& params) {
 
     if (!BuildTransReverseZ(SharedCommons::KEY_TRANS_REVERSE_Z_SIG)) {
         DebugHelper::DebugPrint("TransReverseZ Z PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildOcclusionCullingCompute(SharedCommons::OCCLUSION_CULLING_SIG, SharedCommons::OCCLUSION_CULLING_CS)) {
+        DebugHelper::DebugPrint("OcclusionCulling PSO 빌드 실패");
         return false;
     }
 
@@ -244,7 +249,7 @@ bool PSOManager::BuildGPUDriven(const std::string& signatureKey) {
     return result;
 } // BuildGPUDriven
 
-bool PSOManager::BuildCullingCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
+bool PSOManager::BuildFrustumCullingCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
         b.AddCBV("FrustumPlanes", 0, D3D12_SHADER_VISIBILITY_ALL)               // b0
             .AddSRVTable("MasterInstance", 0, D3D12_SHADER_VISIBILITY_ALL)      // t0
@@ -271,7 +276,6 @@ bool PSOManager::BuildCullingCompute(const std::string& signatureKey, const std:
         return false;
     }
 
-    // Compute Shader 컴파일/로드
     ComPtr<IDxcBlob> csBlob;
     if (!ShaderHelper::InitComputeShader(shaderPath, csBlob.GetAddressOf())) {
         return false;
@@ -292,7 +296,69 @@ bool PSOManager::BuildCullingCompute(const std::string& signatureKey, const std:
 
     m_psoMap[SharedCommons::KEY_CULLING_CS] = std::move(pso);
     return true;
-} // BuildCullingCompute
+} // BuildFrustumCullingCompute
+
+bool PSOManager::BuildOcclusionCullingCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("OcclusionConstants", 0, D3D12_SHADER_VISIBILITY_ALL)               // b0: ViewProj, ScreenSize
+            .AddSRVTable("HiZTexture", 0, D3D12_SHADER_VISIBILITY_ALL)               // t0: Hi-Z 뎁스 텍스처
+            .AddSRVTable("FrustumMainCommands", 1, D3D12_SHADER_VISIBILITY_ALL)      // t1: 1차 통과한 Main Commands
+            .AddSRVTable("FrustumVaseCommands", 2, D3D12_SHADER_VISIBILITY_ALL)      // t2: 1차 통과한 Vase Commands
+            .AddSRVTable("FrustumMainCount", 3, D3D12_SHADER_VISIBILITY_ALL)         // t3: 1차 통과 Main 개수
+            .AddSRVTable("FrustumVaseCount", 4, D3D12_SHADER_VISIBILITY_ALL)         // t4: 1차 통과 Vase 개수
+            .AddSRVTable("MeshInstanceData", 5, D3D12_SHADER_VISIBILITY_ALL)         // t5
+            .AddUAVTable("FinalMainCommands", 0, D3D12_SHADER_VISIBILITY_ALL)        // u0: 최종 통과 Main Commands
+            .AddUAVTable("FinalVaseCommands", 1, D3D12_SHADER_VISIBILITY_ALL)        // u1: 최종 통과 Vase Commands
+            .AddUAVTable("FinalMainCount", 2, D3D12_SHADER_VISIBILITY_ALL)           // u2: 최종 통과 Main 개수 카운터
+            .AddUAVTable("FinalVaseCount", 3, D3D12_SHADER_VISIBILITY_ALL)           // u3: 최종 통과 Vase 개수 카운터
+            .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_POINT,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                D3D12_SHADER_VISIBILITY_ALL);                                         // s0: Hi-Z 샘플링용 Point-Clamp
+        })) {
+        return false;
+    }
+
+    // 구조체에 인덱스 매핑
+    RendererState::OcclusionConstantsIndex = GetRootParamIndex(signatureKey, "OcclusionConstants");
+    RendererState::OcclusionHiZTextureIndex = GetRootParamIndex(signatureKey, "HiZTexture");
+    RendererState::OcclusionFrustumMainCommandsIndex = GetRootParamIndex(signatureKey, "FrustumMainCommands");
+    RendererState::OcclusionFrustumVaseCommandsIndex = GetRootParamIndex(signatureKey, "FrustumVaseCommands");
+    RendererState::OcclusionFrustumMainCountIndex = GetRootParamIndex(signatureKey, "FrustumMainCount");
+    RendererState::OcclusionFrustumVaseCountIndex = GetRootParamIndex(signatureKey, "FrustumVaseCount");
+    RendererState::OcclusionMeshInstanceDataIndex = GetRootParamIndex(signatureKey, "MeshInstanceData");
+    RendererState::OcclusionFinalMainCommandsIndex = GetRootParamIndex(signatureKey, "FinalMainCommands");
+    RendererState::OcclusionFinalVaseCommandsIndex = GetRootParamIndex(signatureKey, "FinalVaseCommands");
+    RendererState::OcclusionFinalMainCountIndex = GetRootParamIndex(signatureKey, "FinalMainCount");
+    RendererState::OcclusionFinalVaseCountIndex = GetRootParamIndex(signatureKey, "FinalVaseCount");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (Occlusion Culling): " + signatureKey);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> csBlob;
+    if (!ShaderHelper::InitComputeShader(shaderPath, csBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::OCCLUSION_CULLING_CS_STR] = csBlob;
+
+    // Compute PSO 생성
+    D3D12PipelineState::ComputeInitParams computeParams;
+    computeParams.device = m_device;
+    computeParams.rootSignature = rootSignature;
+    computeParams.computeShader = CD3DX12_SHADER_BYTECODE(csBlob->GetBufferPointer(), csBlob->GetBufferSize());
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->InitCompute(computeParams)) {
+        DebugHelper::DebugPrint("Occlusion Culling Compute PSO Init 실패");
+        return false;
+    }
+
+    m_psoMap[SharedCommons::OCCLUSION_CULLING_PSO] = std::move(pso);
+    return true;
+} // BuildOcclusionCullingCompute
 
 bool PSOManager::BuildDepthRecord(const std::string& signatureKey) {
     ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
@@ -313,7 +379,7 @@ bool PSOManager::BuildDepthRecord(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::DEPTH_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::DEPTH_PS_STR] = psBlob;
 
-    // Base PSO 파라미터 세팅 (렌더 타깃 비활성화)
+    // Base PSO 파라미터
     D3D12PipelineState::DefaultInitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;

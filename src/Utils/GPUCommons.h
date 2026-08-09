@@ -93,6 +93,17 @@ namespace GPUCommons {
         IndirectCommand() : indexBufferView{}, instanceIndex(0), drawArgs{} {
         }
     }; // IndirectCommand
+
+    struct OcclusionCullingCB {
+        DirectX::XMMATRIX viewProj;
+        float             screenWidth;
+        float             screenHeight;
+        DirectX::XMFLOAT2 padding;
+
+        OcclusionCullingCB() : viewProj(DirectX::XMMatrixIdentity())
+            , screenWidth(0.0f), screenHeight(0.0f), padding(0.0f, 0.0f) {
+        }
+    }; // OcclusionCullingCB
 } // struct
 
 namespace GPUCommons {

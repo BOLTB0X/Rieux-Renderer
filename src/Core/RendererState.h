@@ -45,6 +45,25 @@ public: // Screen
     static UINT CullingMainCountIndex;
     static UINT CullingVaseCountIndex;
 
+    static UINT HZBConstantsIndex;
+    static UINT DepthTextureIndex;
+    static UINT HZBTextureIndex;
+
+    static UINT OcclusionConstantsIndex;
+    static UINT OcclusionHiZTextureIndex;
+    static UINT OcclusionFrustumMainCommandsIndex;
+    static UINT OcclusionFrustumVaseCommandsIndex;
+    static UINT OcclusionFrustumMainCountIndex;
+    static UINT OcclusionFrustumVaseCountIndex;
+    static UINT OcclusionMeshInstanceDataIndex;
+    static UINT OcclusionFinalMainCommandsIndex;
+    static UINT OcclusionFinalVaseCommandsIndex;
+    static UINT OcclusionFinalMainCountIndex;
+    static UINT OcclusionFinalVaseCountIndex;
+
+    static UINT DebugCameraClipIndex;
+    static UINT DebugDepthTexIndex;
+
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
     static UINT DSVCapacity;

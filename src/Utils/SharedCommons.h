@@ -76,6 +76,19 @@ namespace SharedCommons {
 
     static const std::string  DEPTH_VS_STR = "DepthVS";
     static const std::string  DEPTH_PS_STR = "DepthPS";
+
+    static const std::wstring FULLSCREEN_VS = L"HLSL/FullScreenVS.hlsl";
+    static const std::wstring LINEAR_Z_TRANS_PS = L"HLSL/LinearZTransPS.hlsl";
+
+    static const std::string  FULLSCREEN_VS_STR = "FullScreenVS";
+    static const std::string  LINEAR_Z_TRANS_PS_STR = "LinearZTransPS";
+
+    static const std::wstring HIERARCHICAL_Z_CS = L"HLSL/HierarchicalZCS.hlsl";
+    static const std::string  HIERARCHICAL_Z_CS_STR = "HierarchicalZCS";
+
+    static const std::wstring OCCLUSION_CULLING_CS = L"HLSL/OcclusionCullingCS.hlsl";
+    static const std::string  OCCLUSION_CULLING_CS_STR = "OcclusionCullingCS";
+
 } // HLSL
 
 namespace SharedCommons {
@@ -101,10 +114,22 @@ namespace SharedCommons {
     static const std::string  KEY_CULLING_CS = "FrustumCullingCS";
     static const std::string  KEY_CULLING_SIG = "FrustumCullingCS_SIG";
 
-    static const std::string  DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
     static const std::string  KEY_GPU_DEPTH_SOLID_CULL = "GPU_DEPTH_SOLID_CULL";
     static const std::string  KEY_GPU_DEPTH_ALPHA_NO_CULL = "GPU_DEPTH_ALPHA_NO_CULL";
     static const std::string  KEY_DEPTH_RECORD_SIG = "DepthRecord_SIG";
+
+    static const std::string  KEY_HIERARCHICAL_Z_SIG = "HierarchicalZ_SIG";
+    static const std::string  KEY_HIERARCHICAL_Z_CS_SIG = "HierarchicalZCS_SIG";
+
+    static const std::string  DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
+    static const std::string  DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
+    static const std::string  HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
+
+    static const std::string  KEY_TRANS_REVERSE_Z_SIG = "Trans_ReverseZ_SIG";
+    static const std::string  KEY_TRANS_REVERSE_Z_PSO = "Trans_ReverseZ";
+
+    static const std::string OCCLUSION_CULLING_SIG = "OcclusionCullingCS_SIG";
+    static const std::string OCCLUSION_CULLING_PSO = "OcclusionCullingCS_PSO";
 
 } // MAP - KEY
 
@@ -145,22 +170,3 @@ namespace SharedCommons {
     static constexpr float                    ALPHA_FACTOR = 0.5f;
 
 } // Assimp Tex
-
-namespace SharedCommons {
-
-    struct GPUMeshData {
-        uint32_t vertexOffset;
-        uint32_t indexOffset;
-        uint32_t indexCount;
-        uint32_t materialIndex;
-    }; // GPUMeshData
-
-    struct IndirectCommand {
-        uint32_t IndexCountPerInstance;
-        uint32_t InstanceCount;
-        uint32_t StartIndexLocation;
-        uint32_t BaseVertexLocation;
-        uint32_t StartInstanceLocation;
-    }; // IndirectCommand
-
-}; // 구조체

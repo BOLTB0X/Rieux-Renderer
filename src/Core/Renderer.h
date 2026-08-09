@@ -19,7 +19,8 @@ class PSOManager;
 class RenderQueue;
 class Camera;
 class FrustumCuller;
-class DepthRecorder;
+class HierarchicalZBuffer;
+class OcclusionCuller;
 class DirectionalLight;
 class GPUMonitor;
 class TextureManager;
@@ -79,6 +80,11 @@ private:
 private:
     void PopulateCommandList();
 
+    void FrustumPass(ID3D12GraphicsCommandList*);
+    void DepthPass(ID3D12GraphicsCommandList*);
+    void OcclusionPass(ID3D12GraphicsCommandList*);
+    void SponzaPass(ID3D12GraphicsCommandList*);
+
     void OnGUI();
 
 private:
@@ -99,7 +105,8 @@ private:
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_Camera;
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
-    std::unique_ptr<DepthRecorder>           m_DepthRecorder;
+    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuilder;
+    std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;

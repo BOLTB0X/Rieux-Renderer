@@ -40,7 +40,9 @@ private:
 private:
     bool BuildDefaultSponza(const std::string&);
     bool BuildGPUDriven(const std::string&);
-    bool BuildCullingCompute(const std::string&, const std::wstring&);
+    bool BuildFrustumCullingCompute(const std::string&, const std::wstring&);
+    bool BuildOcclusionCullingCompute(const std::string&, const std::wstring&);
+
     bool BuildDepthRecord(const std::string&);
 	bool BuildHierarchicalZ(const std::string&);
     bool BuildTransReverseZ(const std::string&);

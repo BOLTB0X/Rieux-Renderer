@@ -56,12 +56,33 @@ bool RenderTextureManager::Init(const InitParams& params) {
 
     m_renderTextures[SharedCommons::DEPTH_RENDER_TEXTURE] = m_depthTex;
 
+    UINT maxDimension = std::max(SharedCommons::SCREEN_WIDTH, SharedCommons::SCREEN_HEIGHT);
+    UINT hizMipLevels = static_cast<UINT>(std::floor(std::log2(maxDimension))) + 1;
+
+    texParams.device = m_device;
+    texParams.rtvAllocator = m_rtvAllocator.get();
+    texParams.dsvAllocator = m_dsvAllocator.get();
+    texParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator;
+    texParams.width = SharedCommons::SCREEN_WIDTH;
+    texParams.height = SharedCommons::SCREEN_HEIGHT;
+    texParams.type = RenderTexture::RenderTextureType::UAV;
+	texParams.format = DXGI_FORMAT_R32_FLOAT;
+	texParams.mipLevels = hizMipLevels;
+
+    auto m_hzTex = std::make_shared<RenderTexture>();
+    if (!m_hzTex->Init(texParams)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::HIZ_DEPTH_RENDER_TEXTURE);
+        return nullptr;
+    }
+
+    m_renderTextures[SharedCommons::HIZ_DEPTH_RENDER_TEXTURE] = m_hzTex;
+
     return true;
 } // Init
 
 std::shared_ptr<RenderTexture> RenderTextureManager::CreateRenderTexture(
     const std::string& name, UINT width, UINT height,
-    RenderTexture::RenderTextureType type, DXGI_FORMAT format) {
+    RenderTexture::RenderTextureType type, DXGI_FORMAT format, UINT mipLevels) {
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -81,6 +102,7 @@ std::shared_ptr<RenderTexture> RenderTextureManager::CreateRenderTexture(
     texParams.height = height;
     texParams.format = format;
     texParams.type = type;
+    texParams.mipLevels = mipLevels;
 
     if (!renderTexture->Init(texParams)) {
         DebugPrint("RenderTexture 생성 실패: " + name);
@@ -95,3 +117,26 @@ std::shared_ptr<RenderTexture> RenderTextureManager::GetRenderTexture(const std:
     auto it = m_renderTextures.find(name);
     return (it != m_renderTextures.end()) ? it->second : nullptr;
 } // GetRenderTexture
+
+void RenderTextureManager::OnGUI() {
+    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Render Textures ]");
+    ImGui::Separator();
+
+    std::lock_guard<std::mutex> lock(m_mutex);
+
+    for (const auto& [name, tex] : m_renderTextures) {
+        if (!tex || tex->GetType() != RenderTexture::RenderTextureType::Normal) continue;
+
+        UINT srvIndex = tex->GetSRVIndex();
+        if (srvIndex == UINT_MAX) continue;
+
+        ImGui::Text("%s (%ux%u)", name.c_str(), tex->GetWidth(), tex->GetHeight());
+
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(srvIndex);
+
+        float aspect = static_cast<float>(tex->GetHeight()) / static_cast<float>(tex->GetWidth());
+        float previewWidth = 320.0f;
+        ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
+        ImGui::Spacing();
+    }
+} // OnGUI

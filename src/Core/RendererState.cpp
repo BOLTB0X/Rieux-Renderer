@@ -34,6 +34,25 @@ UINT  RendererState::CullingVisibleVaseCommandsIndex = 7;
 UINT  RendererState::CullingMainCountIndex = 8;
 UINT  RendererState::CullingVaseCountIndex = 9;
 
+UINT  RendererState::HZBConstantsIndex = 10;
+UINT  RendererState::DepthTextureIndex = 11;
+UINT  RendererState::HZBTextureIndex = 12;
+
+UINT  RendererState::OcclusionConstantsIndex = 10;
+UINT  RendererState::OcclusionHiZTextureIndex = 11;
+UINT  RendererState::OcclusionFrustumMainCommandsIndex = 12;
+UINT  RendererState::OcclusionFrustumVaseCommandsIndex = 13;
+UINT  RendererState::OcclusionFrustumMainCountIndex = 14;
+UINT  RendererState::OcclusionFrustumVaseCountIndex = 15;
+UINT  RendererState::OcclusionMeshInstanceDataIndex = 16;
+UINT  RendererState::OcclusionFinalMainCommandsIndex = 17;
+UINT  RendererState::OcclusionFinalVaseCommandsIndex = 18;
+UINT  RendererState::OcclusionFinalMainCountIndex = 19;
+UINT  RendererState::OcclusionFinalVaseCountIndex = 20;
+
+UINT  RendererState::DebugCameraClipIndex = 11;
+UINT  RendererState::DebugDepthTexIndex = 12;
+
 UINT  RendererState::SharedHeapCapacity = 1024;
 
 UINT  RendererState::RTVCapacity = 64;

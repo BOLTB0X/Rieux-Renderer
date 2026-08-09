@@ -66,6 +66,8 @@ bool Sponza::Init(const InitParams& params) {
     m_psoSolidNoCull = params.psoSolidNoCull;
     m_psoWireCull = params.psoWireCull;
     m_psoWireNoCull = params.psoWireNoCull;
+	m_psoDepthSolid = params.psoDepthSolid;
+	m_psoDepthAlpha = params.psoDepthAlpha;
     return true;
 } // Init
 
@@ -108,6 +110,45 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
         );
     }
 } // SubmitIndirect
+
+void Sponza::SubmitIndirectDepth(const SubmitIndirectParams& params) {
+    if (!params.cmdList) return;
+
+    ID3D12GraphicsCommandList* cmdList = params.cmdList;
+
+    cmdList->SetGraphicsRootSignature(m_rootSignature);
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, params.frameConstantsGPUAddress);
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, params.lightConstantsGPUAddress);
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, GetInstanceDataGPUHandle());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_heapAllocator->GetGPUHandle(0));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_heapAllocator->GetGPUHandle(0));
+
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    if (params.mainVisibleCommandsBuffer && m_mainIndirectCount > 0 && m_psoDepthSolid) {
+        cmdList->SetPipelineState(m_psoDepthSolid);
+        cmdList->ExecuteIndirect(
+            m_commandSignature.Get(),
+            m_mainIndirectCount,
+            params.mainVisibleCommandsBuffer,
+            0,
+            params.mainCounterBuffer,
+            0
+        );
+    }
+
+    if (params.vaseVisibleCommandsBuffer && m_vaseIndirectCount > 0 && m_psoDepthAlpha) {
+        cmdList->SetPipelineState(m_psoDepthAlpha);
+        cmdList->ExecuteIndirect(
+            m_commandSignature.Get(),
+            m_vaseIndirectCount,
+            params.vaseVisibleCommandsBuffer,
+            0,
+            params.vaseCounterBuffer,
+            0
+        );
+    }
+} // SubmitIndirectDepth
 
 void                        Sponza::SetPosition(const XMFLOAT3& pos) { m_Transform.SetPosition(pos); } // SetPosition
 void                        Sponza::SetPosition(float x, float y, float z) { m_Transform.SetPosition(x, y, z); } // SetPosition

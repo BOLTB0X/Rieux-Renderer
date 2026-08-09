@@ -28,10 +28,11 @@ public:
     ~RenderTextureManager();
 
     bool Init(const InitParams&);
+    void OnGUI();
 
 public:
     std::shared_ptr<RenderTexture> CreateRenderTexture(const std::string&, UINT, UINT,
-        RenderTexture::RenderTextureType type, DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT);
+        RenderTexture::RenderTextureType type, DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT, UINT mipLevels = 1);
     std::shared_ptr<RenderTexture> GetRenderTexture(const std::string&) const;
 
 private:

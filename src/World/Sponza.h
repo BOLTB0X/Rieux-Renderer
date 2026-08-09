@@ -15,6 +15,9 @@ public:
         ID3D12PipelineState* psoSolidNoCull = nullptr;
         ID3D12PipelineState* psoWireCull = nullptr;
         ID3D12PipelineState* psoWireNoCull = nullptr;
+
+        ID3D12PipelineState* psoDepthSolid = nullptr;
+        ID3D12PipelineState* psoDepthAlpha = nullptr;
     }; // InitDefaultParams
 
     struct SubmitIndirectParams {
@@ -35,12 +38,14 @@ public:
         }
     }; // SubmitIndirectParams
 
+
 public:
     Sponza();
     virtual ~Sponza();
 
     bool                        Init(const InitParams&);
     void                        SubmitIndirect(const SubmitIndirectParams&);
+    void                        SubmitIndirectDepth(const SubmitIndirectParams&);
     void                        OnGUI();
 
 public:
@@ -75,6 +80,8 @@ private:
     ID3D12PipelineState*                           m_psoSolidNoCull;
     ID3D12PipelineState*                           m_psoWireCull;
     ID3D12PipelineState*                           m_psoWireNoCull;
+    ID3D12PipelineState*                           m_psoDepthSolid;
+    ID3D12PipelineState*                           m_psoDepthAlpha;
     DescriptorHeapAllocator*                       m_heapAllocator;
     bool                                           m_enableWireframe;
     UINT                                           m_instanceDataDescriptorIndex;

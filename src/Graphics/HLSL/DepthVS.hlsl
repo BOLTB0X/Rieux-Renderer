@@ -1,5 +1,6 @@
 // DepthVS.hlsl
 #include "Commons.hlsli"
+#include "GPUDriven.hlsli"
 
 struct PBRVertex
 {
@@ -10,38 +11,16 @@ struct PBRVertex
     float3 binormal;
 }; // PBRVertex
 
-struct MeshInstanceData
-{
-    matrix worldMatrix;
-    uint   vertexBufferIndex;
-    uint   albedoIndex;
-    uint   normalIndex;
-    uint   alphaIndex;
-
-    float3 aabbMin;
-    float  mPadding1;
-    float3 aabbMax;
-    float  mPadding2;
-
-    float  isVase;
-    float3 mPadding3;
-}; // MeshInstanceData
-
-struct InstanceCB
-{
-    uint InstanceIndex;
-}; // InstanceCB
-
-StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
-StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
-ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
-
 struct VS_OUT
 {
     float4 position : SV_POSITION;
     float2 texcoord : TEXCOORD0;
     uint   alphaIdx : BLENDINDICES0;
 }; // VS_OUT
+
+StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
+ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
 
 VS_OUT main(uint vertexID : SV_VertexID)
 {

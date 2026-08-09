@@ -2,55 +2,19 @@
 #ifndef _CULLING_HLSLI_
 #define _CULLING_HLSLI_
 
-struct IndexBufferView
-{
-    uint2 address;
-    uint  size;
-    uint  format; // DXGI_FORMAT (R16_UINT = 57, R32_UINT = 42 등)
-}; // IndexBufferView
-
-struct DrawIndexedArguments
-{
-    uint IndexCountPerInstance;
-    uint InstanceCount;
-    uint StartIndexLocation;
-    int  BaseVertexLocation;
-    uint StartInstanceLocation;
-}; // DrawIndexedArguments
-
-struct IndirectCommand
-{
-    IndexBufferView      indexBufferView;
-    uint                 instanceIndex;
-    DrawIndexedArguments drawArgs;
-}; // IndirectCommand
-
-struct MeshInstanceData
-{
-    matrix worldMatrix;
-    uint  vertexBufferIndex;
-    uint  albedoIndex;
-    uint  normalIndex;
-    uint  alphaIndex;
-
-    float3 aabbMin;
-    float  mPadding1;
-    float3 aabbMax;
-    float  mPadding2;
-
-    float  isVase;
-    float3 mPadding3;
-}; // MeshInstanceData
-
-cbuffer FrustumCullingCB : register(b0)
+struct FrustumCullingCB
 {
     float4 frustumPlanes[6];
     uint   totalInstances;
     float3 fPadding;
-} // FrustumCullingCB
+}; // FrustumCullingCB
 
-#define FRUSTUM_PLANES  frustumPlanes
-#define TOTAL_INSTANCES totalInstances
+struct OcclusionCB
+{
+    matrix viewProjection;
+    float2 screenSize;
+    float2 oPadding;
+}; // OcclusionCB
 
 // AABB와 프러스텀 교차 판정 함수
 bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, matrix world, float4 planes[6])
@@ -101,5 +65,14 @@ bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, matrix world, float4 plan
 
     return true;
 } // CheckBoxVisible
+
+float3 Get_BoxCorner(float3 aabbMin, float3 aabbMax, uint index)
+{
+    return float3(
+        (index & 1) ? aabbMax.x : aabbMin.x,
+        (index & 2) ? aabbMax.y : aabbMin.y,
+        (index & 4) ? aabbMax.z : aabbMin.z
+    );
+} // GetBoxCorner
 
 #endif
