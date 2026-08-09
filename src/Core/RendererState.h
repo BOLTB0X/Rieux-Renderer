@@ -37,6 +37,14 @@ public: // Screen
     static UINT BindlessTexIndex;
     static UINT BindlessBufIndex;
 
+    static UINT CullingFrustumPlanesIndex;
+    static UINT CullingMasterInstanceIndex;
+    static UINT CullingMasterCommandsIndex;
+    static UINT CullingVisibleMainCommandsIndex;
+    static UINT CullingVisibleVaseCommandsIndex;
+    static UINT CullingMainCountIndex;
+    static UINT CullingVaseCountIndex;
+
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
     static UINT DSVCapacity;

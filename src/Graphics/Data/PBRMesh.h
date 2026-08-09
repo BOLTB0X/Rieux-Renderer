@@ -36,8 +36,8 @@ public:
             vertices(nullptr), indices(nullptr), 
             materialIndex(0), name(""), heapAllocator(nullptr),
             aabbMin(0.0f, 0.0f, 0.0f), aabbMax(0.0f, 0.0f, 0.0f) {
-        } // InitParams
-    }; // InitParams
+        } // InitDefaultParams
+    }; // InitDefaultParams
 
 public:
     PBRMesh();

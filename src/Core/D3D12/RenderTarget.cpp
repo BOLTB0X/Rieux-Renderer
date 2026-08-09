@@ -86,7 +86,7 @@ bool RenderTarget::Init(const InitParams& params) {
 
     D3D12_CLEAR_VALUE depthClear = {};
     depthClear.Format = params.depthFormat;
-    depthClear.DepthStencil.Depth = 1.0f;
+    depthClear.DepthStencil.Depth = 0.0f;
     depthClear.DepthStencil.Stencil = 0;
 
     if (FAILED(params.device->CreateCommittedResource(
@@ -119,7 +119,7 @@ void RenderTarget::BeginRender(ID3D12GraphicsCommandList* cmdList, const float c
     cmdList->RSSetScissorRects(1, &m_scissorRect);
 
     cmdList->ClearRenderTargetView(m_rtvHandle, clearColor, 0, nullptr);
-    cmdList->ClearDepthStencilView(m_dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+    cmdList->ClearDepthStencilView(m_dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
 } // BeginRender
 
 void RenderTarget::EndRender(ID3D12GraphicsCommandList* cmdList) {

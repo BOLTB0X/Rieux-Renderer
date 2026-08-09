@@ -17,6 +17,7 @@
 #include "DescriptorHeapAllocator.h"
 #include "RenderQueue.h"
 #include "Camera.h"
+#include "FrustumCuller.h"
 #include "DirectionalLight.h"
 #include "GPUMonitor.h"
 // World
@@ -44,6 +45,7 @@ Renderer::Renderer()
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
     m_Camera = std::make_unique<Camera>();
+    m_FrustumCuller = std::make_unique<FrustumCuller>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -92,6 +94,7 @@ void Renderer::Shutdown() {
     m_ImGuiManager.reset();
 
     // LoadAssets 역순 해제
+	m_FrustumCuller.reset();
     m_Sponza.reset();
     m_TextureManager.reset();
     m_PSOManager.reset();
@@ -118,7 +121,6 @@ void Renderer::Shutdown() {
     m_RenderQueue.reset();
     m_DirectionalLight.reset();
     m_Camera.reset();
-
     // 디바이스 최종 해제
     m_D3D12Device.reset();
 } // Shutdown
@@ -128,6 +130,7 @@ bool Renderer::Frame(const FrameParams& frameParams) {
 
     m_Camera->Frame(frameParams.moveForward, frameParams.moveRight, frameParams.moveUp,
         frameParams.rotationDeltaX, frameParams.rotationDeltaY, frameParams.zoomDelta);
+    m_FrustumCuller->Frame(m_Camera->GetViewMatrix(), m_Camera->GetCullingProjectionMatrix());
     m_DirectionalLight->Frame();
     m_GPUMonitor->Frame();
 
@@ -144,8 +147,6 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     stateParams.lightProjectionMatrix = m_DirectionalLight->GetProjection();
     m_RendererState->Frame(stateParams);
     
-    m_Sponza->Frame(m_Camera->GetFrustum());
-
     return Render();
 } // Frame
 
@@ -248,6 +249,7 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     m_Camera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
         SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
     m_DirectionalLight->Init();
+
     if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
         DebugHelper::DebugPrint("m_RendererState 초기화 실패");
         return false;
@@ -297,6 +299,18 @@ bool Renderer::LoadAssets(HWND hwnd) {
         return false;
     }
 
+    FrustumCuller::InitParams frumInit;
+    frumInit.device = m_D3D12Device->GetDevice();
+	frumInit.maxMainCount = m_Sponza->GetMainIndirectCount();
+	frumInit.maxVaseCount = m_Sponza->GetVaseIndirectCount();
+    frumInit.rootSig = m_PSOManager->GetRootSignature(SharedCommons::KEY_CULLING_SIG);
+	frumInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_CULLING_CS)->GetPSO();
+    frumInit.heapAllocator = m_sharedDescriptorAllocator.get();
+    if (!m_FrustumCuller->Init(frumInit)) {
+        DebugHelper::DebugPrint("m_FrustumCuller 초기화 실패");
+        return false;
+    }
+
     return true;
 } // LoadAssets
 
@@ -331,6 +345,11 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
         [this]() { m_Sponza->OnGUI(); }
     ));
 
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Frustum Culler GUI",
+        [this]() { m_FrustumCuller->OnGUI(); }
+    ));
+
     return true;
 } // UpdateGUIs
 
@@ -338,17 +357,29 @@ void Renderer::PopulateCommandList() {
     m_CommandQueue->Reset();
     ID3D12GraphicsCommandList* cmdList = m_CommandQueue->GetList();
 
-    cmdList->SetGraphicsRootSignature(m_PSOManager->GetRootSignature(SharedCommons::KEY_GPU_SPONZA_SIG));
     ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
-    // CBV 바인딩
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, m_RendererState->GetFrameCBGPUVirtualAddress());
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, m_RendererState->GetLightCBGPUVirtualAddress());
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, m_Sponza->GetInstanceDataGPUHandle());
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_sharedDescriptorAllocator->GetGPUHandle(0));
+    // ==========================================
+    // 프러스텀 컬링 컴퓨트 패스 실행
+    // ==========================================
+    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 255), L"Frustum Culling Pass");
 
+    FrustumCuller::DispatchParams cullParams = {};
+    cullParams.cmdList = cmdList;
+    cullParams.instanceDataBuffer = m_Sponza->GetInstanceDataBuffer();
+    cullParams.instanceDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+    cullParams.masterIndirectDescriptorIndex = m_Sponza->GetMasterIndirectDescriptorIndex();
+    cullParams.mainIndirectBuffer = m_Sponza->GetMainIndirectBuffer();
+    cullParams.vaseIndirectBuffer = m_Sponza->GetVaseIndirectBuffer();
+    m_FrustumCuller->Dispatch(cullParams);
+    m_FrustumCuller->ReadbackToCPU(cmdList);
+
+    PIXEndEvent(cmdList);
+
+    // ==========================================
+    // 기존 그래픽스 렌더 패스 시작
+    // ==========================================
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
     // 오프스크린 타겟(씬 렌더 타겟) 세팅
@@ -362,8 +393,16 @@ void Renderer::PopulateCommandList() {
     // 스폰자 씬 렌더링
     m_RenderQueue->Clear();
     PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
+	Sponza::SubmitIndirectParams submitParams;
+	submitParams.cmdList = cmdList;
+	submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+	submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.mainVisibleCommandsBuffer = m_FrustumCuller->GetMainVisibleCommandsBuffer();
+    submitParams.mainCounterBuffer = m_FrustumCuller->GetMainCounterBuffer();
+    submitParams.vaseVisibleCommandsBuffer = m_FrustumCuller->GetVaseVisibleCommandsBuffer();
+    submitParams.vaseCounterBuffer = m_FrustumCuller->GetVaseCounterBuffer();
 
-    m_Sponza->SubmitIndirect(cmdList);
+    m_Sponza->SubmitIndirect(submitParams);
 
     PIXEndEvent(cmdList);
 

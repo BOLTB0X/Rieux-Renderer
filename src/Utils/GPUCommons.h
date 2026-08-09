@@ -56,7 +56,43 @@ namespace GPUCommons {
         uint32_t          albedoIndex;
         uint32_t          normalIndex;
         uint32_t          alphaIndex;
-    };
+
+        DirectX::XMFLOAT3 aabbMin;
+        float             padding1;
+        DirectX::XMFLOAT3 aabbMax;
+        float             padding2;
+
+        float             isVase;
+        DirectX::XMFLOAT3 padding3;
+
+        MeshInstanceData()
+            : worldMatrix(DirectX::XMMatrixIdentity()),
+            vertexBufferIndex(0),
+            albedoIndex(0), normalIndex(0), alphaIndex(0),
+            aabbMin(0.0f, 0.0f, 0.0f), padding1(0.0f),
+            aabbMax(0.0f, 0.0f, 0.0f), padding2(0.0f),
+            isVase(0.0), padding3(0.0f, 0.0f, 0.0f) {
+		}
+    }; // MeshInstanceData
+
+    struct GPUIndexBufferView {
+        uint32_t address[2];
+        uint32_t size;
+        uint32_t format;
+
+        GPUIndexBufferView() 
+            : address{ 0, 0 }, size(0), format(0) {
+		}
+    }; // GPUIndexBufferView
+
+    struct IndirectCommand {
+        D3D12_INDEX_BUFFER_VIEW      indexBufferView;
+        UINT                         instanceIndex;
+        D3D12_DRAW_INDEXED_ARGUMENTS drawArgs;
+
+        IndirectCommand() : indexBufferView{}, instanceIndex(0), drawArgs{} {
+        }
+    }; // IndirectCommand
 } // struct
 
 namespace GPUCommons {
@@ -135,4 +171,10 @@ namespace GPUCommons {
             padding3(0.0f, 0.0f, 0.0f, 0.0f) {
         }
     }; // DirectionalLightCB
+
+    __declspec(align(256)) struct FrustumCullingCB {
+        DirectX::XMFLOAT4 planes[6];
+        UINT              totalInstances;
+        DirectX::XMFLOAT3 padding;
+    }; // FrustumCullingCB
 } // CBs

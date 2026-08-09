@@ -18,7 +18,7 @@ public:
 
         InitParams() : hwnd(nullptr), device(nullptr), numFramesInFlight(0), rtvFormat{} {
         }
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     ImGuiManager();

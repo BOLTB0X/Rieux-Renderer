@@ -18,11 +18,19 @@ struct MeshInstanceData
     uint   albedoIndex;
     uint   normalIndex;
     uint   alphaIndex;
+
+    float3 aabbMin;
+    float  mPadding1;
+    float3 aabbMax;
+    float  mPadding2;
+
+    float  isVase;
+    float3 mPadding3;
 }; // MeshInstanceData
 
 Texture2D                          g_Textures[] : register(t0, space1);
-SamplerState                       Sampler : register(s0);
 StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
+SamplerState                       Sampler : register(s0);
 
 cbuffer InstanceCB : register(b2)
 {

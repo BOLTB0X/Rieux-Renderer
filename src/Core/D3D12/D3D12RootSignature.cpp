@@ -68,6 +68,26 @@ D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddSRVTable(const std:
     return *this;
 } // AddSRVTable
 
+D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddUAVTable(const std::string& tag,
+    UINT shaderRegister, D3D12_SHADER_VISIBILITY visibility, UINT numDescriptors, UINT registerSpace) {
+    m_paramIndexByTag[tag] = static_cast<UINT>(m_rootParameters.size());
+
+    D3D12_DESCRIPTOR_RANGE range = {
+        D3D12_DESCRIPTOR_RANGE_TYPE_UAV, numDescriptors, shaderRegister, registerSpace,
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+    };
+    m_descriptorRanges.push_back(range);
+
+    D3D12_ROOT_PARAMETER param = {};
+    param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    param.DescriptorTable.NumDescriptorRanges = 1;
+    param.DescriptorTable.pDescriptorRanges = &m_descriptorRanges.back();
+    param.ShaderVisibility = visibility;
+
+    m_rootParameters.push_back(param);
+    return *this;
+} // AddUAVTable
+
 D3D12RootSignature::Builder& D3D12RootSignature::Builder::AddStaticSampler(
     UINT shaderRegister, D3D12_FILTER filter,
     D3D12_TEXTURE_ADDRESS_MODE addressMode, D3D12_SHADER_VISIBILITY visibility) {

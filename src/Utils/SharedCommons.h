@@ -67,6 +67,9 @@ namespace SharedCommons {
 
     static const std::string  GPU_SPONZA_VS_STR = "GPUSponzaVS";
     static const std::string  GPU_SPONZA_PS_STR = "GPUSponzaPS";
+
+    static const std::wstring CULLING_CS = L"HLSL/FrustumCullingCS.hlsl";
+    static const std::string  CULLING_CS_STR = "FrustumCullingCS";
 } // HLSL
 
 namespace SharedCommons {
@@ -88,6 +91,10 @@ namespace SharedCommons {
     static const std::string  KEY_GPU_SPONZA_SOLID_NO_CULL = "GPUSponza_SOLID_NOCULL";
     static const std::string  KEY_GPU_SPONZA_WIRE_CULL = "GPUSponza_WIRE_CULL";
     static const std::string  KEY_GPU_SPONZA_WIRE_NO_CULL = "GPUSponza_WIRE_NOCULL";
+
+    static const std::string  KEY_CULLING_CS = "FrustumCullingCS";
+    static const std::string  KEY_CULLING_SIG = "FrustumCullingCS_SIG";
+
 } // MAP - KEY
 
 namespace SharedCommons {

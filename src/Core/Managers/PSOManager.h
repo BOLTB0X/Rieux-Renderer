@@ -18,7 +18,7 @@ public:
         DXGI_FORMAT   dsvFormat;
 
         InitParams();
-    }; // InitParams
+    }; // InitDefaultParams
 
 public:
     PSOManager();
@@ -39,11 +39,12 @@ private:
 private:
     bool BuildDefaultSponzaPSO(const std::string&);
     bool BuildGPUDrivenPSO(const std::string&);
+    bool BuildCullingComputePSO(const std::string&, const std::wstring&);
 
-    bool BuildSolidCullBack(const std::string&, D3D12PipelineState::InitParams);
-    bool BuildSolidCullNone(const std::string&, D3D12PipelineState::InitParams);
-    bool BuildWireframeCullBack(const std::string&, D3D12PipelineState::InitParams);
-    bool BuildWireframeCullNone(const std::string&, D3D12PipelineState::InitParams);
+    bool BuildSolidCullBack(const std::string&, D3D12PipelineState::DefaultInitParams);
+    bool BuildSolidCullNone(const std::string&, D3D12PipelineState::DefaultInitParams);
+    bool BuildWireframeCullBack(const std::string&, D3D12PipelineState::DefaultInitParams);
+    bool BuildWireframeCullNone(const std::string&, D3D12PipelineState::DefaultInitParams);
 
 private:
     ID3D12Device*                                                        m_device;

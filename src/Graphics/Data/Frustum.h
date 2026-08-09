@@ -1,4 +1,6 @@
 #pragma once
+#include <d3d12.h>
+#include <wrl/client.h>
 #include <DirectXMath.h>
 
 class Frustum {
@@ -9,7 +11,10 @@ public:
     ~Frustum();
 
     void Init(float);
-    void BuildFrustum(DirectX::XMMATRIX, DirectX::XMMATRIX);
+    void Frame(DirectX::XMMATRIX, DirectX::XMMATRIX);
+
+public:
+    const DirectX::XMFLOAT4* GetPlanes() const;
 
 public:
     bool CheckPoint(float, float, float);
