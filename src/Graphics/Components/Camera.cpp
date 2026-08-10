@@ -23,7 +23,7 @@ Camera::Camera()
     m_right = DirectX::XMVector3Cross(m_forward, MathHelper::UP);
     m_upVector = DirectX::XMVector3Cross(m_right, m_forward);
     m_rotationSpeed = 0.5f;
-    m_moveSpeed = 1.0;
+    m_moveSpeed = 500.0;
     m_zoomSpeed = 1.0;
 } //Camera
 
@@ -201,8 +201,8 @@ void Camera::SetFar(float screenFar) { m_far = screenFar; UpdateProjection(); }
 XMFLOAT3 Camera::GetPosition() const { return m_position; }
 XMFLOAT3 Camera::GetRotation() const { return m_rotation; }
 XMMATRIX Camera::GetViewMatrix() const { return m_viewMatrix; }
-XMMATRIX Camera::GetProjectionMatrix() const { return m_projectionMatrix; }
-XMMATRIX Camera::GetCullingProjectionMatrix() const { return m_cullingProjectionMatrix; }
+XMMATRIX Camera::GetReverseZProjectionMatrix() const { return m_projectionMatrix; }
+XMMATRIX Camera::GetStandardZProjectionMatrix() const { return m_cullingProjectionMatrix; }
 
 float Camera::GetFov() const { return m_fov; }
 float Camera::GetNear() const { return m_near; }

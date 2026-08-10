@@ -50,11 +50,11 @@ bool RenderTextureManager::Init(const InitParams& params) {
     texParams.type = RenderTexture::RenderTextureType::Depth;
 
     if (!m_depthTex->Init(texParams)) {
-        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::DEPTH_RENDER_TEXTURE);
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_DEPTH_RENDER_TEXTURE);
         return nullptr;
     }
 
-    m_renderTextures[SharedCommons::DEPTH_RENDER_TEXTURE] = m_depthTex;
+    m_renderTextures[SharedCommons::KEY_DEPTH_RENDER_TEXTURE] = m_depthTex;
 
     UINT maxDimension = std::max(SharedCommons::SCREEN_WIDTH, SharedCommons::SCREEN_HEIGHT);
     UINT hizMipLevels = static_cast<UINT>(std::floor(std::log2(maxDimension))) + 1;
@@ -71,11 +71,11 @@ bool RenderTextureManager::Init(const InitParams& params) {
 
     auto m_hzTex = std::make_shared<RenderTexture>();
     if (!m_hzTex->Init(texParams)) {
-        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::HIZ_DEPTH_RENDER_TEXTURE);
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE);
         return nullptr;
     }
 
-    m_renderTextures[SharedCommons::HIZ_DEPTH_RENDER_TEXTURE] = m_hzTex;
+    m_renderTextures[SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE] = m_hzTex;
 
     return true;
 } // Init

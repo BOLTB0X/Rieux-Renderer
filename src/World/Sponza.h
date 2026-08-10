@@ -15,13 +15,19 @@ public:
         ID3D12PipelineState* psoSolidNoCull = nullptr;
         ID3D12PipelineState* psoWireCull = nullptr;
         ID3D12PipelineState* psoWireNoCull = nullptr;
-
         ID3D12PipelineState* psoDepthSolid = nullptr;
         ID3D12PipelineState* psoDepthAlpha = nullptr;
     }; // InitDefaultParams
 
+    enum class SubmitIndirectType {
+        General,
+        Depth,
+        Shadow
+    }; // RenderTextureType
+
     struct SubmitIndirectParams {
         ID3D12GraphicsCommandList* cmdList;
+
 		D3D12_GPU_VIRTUAL_ADDRESS  frameConstantsGPUAddress;
 		D3D12_GPU_VIRTUAL_ADDRESS  lightConstantsGPUAddress;
 
@@ -31,13 +37,15 @@ public:
         ID3D12Resource*            vaseVisibleCommandsBuffer;
         ID3D12Resource*            vaseCounterBuffer;
 
+        SubmitIndirectType         type;
+
         SubmitIndirectParams()
             : cmdList(nullptr), frameConstantsGPUAddress(0), lightConstantsGPUAddress(0),
             mainVisibleCommandsBuffer(nullptr), mainCounterBuffer(nullptr),
-            vaseVisibleCommandsBuffer(nullptr), vaseCounterBuffer(nullptr) {
+            vaseVisibleCommandsBuffer(nullptr), vaseCounterBuffer(nullptr),
+            type(SubmitIndirectType::General){
         }
     }; // SubmitIndirectParams
-
 
 public:
     Sponza();
@@ -45,7 +53,6 @@ public:
 
     bool                        Init(const InitParams&);
     void                        SubmitIndirect(const SubmitIndirectParams&);
-    void                        SubmitIndirectDepth(const SubmitIndirectParams&);
     void                        OnGUI();
 
 public:
@@ -82,12 +89,16 @@ private:
     ID3D12PipelineState*                           m_psoWireNoCull;
     ID3D12PipelineState*                           m_psoDepthSolid;
     ID3D12PipelineState*                           m_psoDepthAlpha;
+
     DescriptorHeapAllocator*                       m_heapAllocator;
+
     bool                                           m_enableWireframe;
+
     UINT                                           m_instanceDataDescriptorIndex;
     UINT                                           m_masterIndirectDescriptorIndex;
     UINT                                           m_mainIndirectCount;
     UINT                                           m_vaseIndirectCount;
+
     bool                                           m_freezeCulling;
     Transform                                      m_Transform;
 }; // Sponza

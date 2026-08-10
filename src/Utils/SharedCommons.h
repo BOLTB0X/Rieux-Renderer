@@ -89,6 +89,8 @@ namespace SharedCommons {
     static const std::wstring OCCLUSION_CULLING_CS = L"HLSL/OcclusionCullingCS.hlsl";
     static const std::string  OCCLUSION_CULLING_CS_STR = "OcclusionCullingCS";
 
+    inline const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
+
 } // HLSL
 
 namespace SharedCommons {
@@ -121,15 +123,18 @@ namespace SharedCommons {
     static const std::string  KEY_HIERARCHICAL_Z_SIG = "HierarchicalZ_SIG";
     static const std::string  KEY_HIERARCHICAL_Z_CS_SIG = "HierarchicalZCS_SIG";
 
-    static const std::string  DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
-    static const std::string  DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
-    static const std::string  HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
+    static const std::string  KEY_DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
+    static const std::string  KEY_DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
+    static const std::string  KEY_HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
 
     static const std::string  KEY_TRANS_REVERSE_Z_SIG = "Trans_ReverseZ_SIG";
     static const std::string  KEY_TRANS_REVERSE_Z_PSO = "Trans_ReverseZ";
 
-    static const std::string OCCLUSION_CULLING_SIG = "OcclusionCullingCS_SIG";
-    static const std::string OCCLUSION_CULLING_PSO = "OcclusionCullingCS_PSO";
+    static const std::string KEY_OCCLUSION_CULLING_SIG = "OcclusionCullingCS_SIG";
+    static const std::string KEY_OCCLUSION_CULLING_PSO = "OcclusionCullingCS_PSO";
+
+    inline const std::string KEY_DEBUG_AABB_SIG = "DebugAABBSignature";
+    inline const std::string KEY_DEBUG_AABB_PSO = "DebugAABBPso";
 
 } // MAP - KEY
 

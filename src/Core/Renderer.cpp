@@ -138,20 +138,20 @@ bool Renderer::Frame(const FrameParams& frameParams) {
 
     m_Camera->Frame(frameParams.moveForward, frameParams.moveRight, frameParams.moveUp,
         frameParams.rotationDeltaX, frameParams.rotationDeltaY, frameParams.zoomDelta);
-    m_FrustumCuller->Frame(m_Camera->GetViewMatrix(), m_Camera->GetCullingProjectionMatrix());
+    m_FrustumCuller->Frame(m_Camera->GetViewMatrix(), m_Camera->GetStandardZProjectionMatrix());
     m_DirectionalLight->Frame();
     m_GPUMonitor->Frame();
 
     OcclusionCuller::FrameParams occParams;
     occParams.viewMatrix = m_Camera->GetViewMatrix();
-    occParams.projectionMatrix = m_Camera->GetProjectionMatrix();
+    occParams.projectionMatrix = m_Camera->GetReverseZProjectionMatrix();
     occParams.screenWidth = static_cast<float>(RendererState::ScreenWidth);
     occParams.screenHeight = static_cast<float>(RendererState::ScreenHeight);
     m_OcclusionCuller->Frame(occParams);
 
     RendererState::FrameParams stateParams;
     stateParams.view = m_Camera->GetViewMatrix();
-    stateParams.projection = m_Camera->GetProjectionMatrix();
+    stateParams.projection = m_Camera->GetReverseZProjectionMatrix();
     stateParams.cameraPosition = m_Camera->GetPosition();
     stateParams.cameraFov = m_Camera->GetFov();
     stateParams.direction = m_DirectionalLight->GetDirection();
@@ -339,8 +339,8 @@ bool Renderer::LoadAssets(HWND hwnd) {
 
     OcclusionCuller::InitParams occInit;
     occInit.device = device;
-    occInit.rootSig = m_PSOManager->GetID3D12RootSignature(SharedCommons::OCCLUSION_CULLING_SIG);
-    occInit.pso = m_PSOManager->GetPSO(SharedCommons::OCCLUSION_CULLING_PSO)->GetPSO();
+    occInit.rootSig = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_OCCLUSION_CULLING_SIG);
+    occInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_OCCLUSION_CULLING_PSO)->GetPSO();
     occInit.maxMainCount = m_Sponza->GetMainIndirectCount();
     occInit.maxVaseCount = m_Sponza->GetVaseIndirectCount();
     occInit.heapAllocator = m_sharedDescriptorAllocator.get();
@@ -486,7 +486,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     // Depth
     // ==========================================
     PIXBeginEvent(cmdList, PIX_COLOR(0, 0, 255), L"Depth Recording Pass");
-    auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::DEPTH_RENDER_TEXTURE).get();
+    auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
 
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
     depthTexture->ClearDepth(cmdList, 0.0f, 0);
@@ -504,8 +504,9 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.mainCounterBuffer = m_FrustumCuller->GetMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_FrustumCuller->GetVaseVisibleCommandsBuffer();
     submitParams.vaseCounterBuffer = m_FrustumCuller->GetVaseCounterBuffer();
+    submitParams.type = Sponza::SubmitIndirectType::Depth;
 
-    m_Sponza->SubmitIndirectDepth(submitParams);
+    m_Sponza->SubmitIndirect(submitParams);
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
 
     PIXEndEvent(cmdList);
@@ -553,8 +554,8 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
     HierarchicalZBuffer::BuildParams hizParams;
     hizParams.cmdList = cmdList;
-    hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::DEPTH_RENDER_TEXTURE).get();
-    hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::HIZ_DEPTH_RENDER_TEXTURE).get();
+    hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
+    hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
     m_HierarchicalZBuilder->Build(hizParams);
     PIXEndEvent(cmdList);
 
@@ -607,7 +608,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 void Renderer::OcclusionPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Pass");
 
-    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::HIZ_DEPTH_RENDER_TEXTURE).get();
+    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
 
     OcclusionCuller::DispatchParams occParams = {};
     occParams.cmdList = cmdList;
@@ -641,7 +642,7 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
     submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
-
+    submitParams.type = Sponza::SubmitIndirectType::General;
     m_Sponza->SubmitIndirect(submitParams);
 
     PIXEndEvent(cmdList);

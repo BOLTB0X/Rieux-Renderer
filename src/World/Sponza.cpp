@@ -39,8 +39,7 @@ Sponza::~Sponza() {
 } // ~Sponza
 
 bool Sponza::Init(const InitParams& params) {
-    if (!params.psoSolidCull || !params.psoSolidNoCull || !params.psoWireCull || !params.psoWireNoCull
-        || !params.heapAllocator || !params.rootSignature) {
+    if (!params.heapAllocator || !params.rootSignature) {
         DebugHelper::DebugPrint("Sponza 초기화 실패");
         return false;
     }
@@ -83,8 +82,20 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
 
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-    ID3D12PipelineState* mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
-    ID3D12PipelineState* vasePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;
+
+    ID3D12PipelineState* mainPSO;
+    ID3D12PipelineState* sidePSO;
+    if (params.type == SubmitIndirectType::General) {
+        mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
+        sidePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;
+    }
+    else {
+        mainPSO = m_psoDepthSolid;
+        sidePSO = m_psoDepthAlpha;
+    }
+
+ /*   ID3D12PipelineState* mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
+    ID3D12PipelineState* vasePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;*/
 
     if (params.mainVisibleCommandsBuffer && m_mainIndirectCount > 0) {
         cmdList->SetPipelineState(mainPSO);
@@ -99,7 +110,7 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
     }
 
     if (params.vaseVisibleCommandsBuffer && m_vaseIndirectCount > 0) {
-        cmdList->SetPipelineState(vasePSO);
+        cmdList->SetPipelineState(sidePSO);
         cmdList->ExecuteIndirect(
             m_commandSignature.Get(),
             m_vaseIndirectCount,
@@ -110,45 +121,6 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
         );
     }
 } // SubmitIndirect
-
-void Sponza::SubmitIndirectDepth(const SubmitIndirectParams& params) {
-    if (!params.cmdList) return;
-
-    ID3D12GraphicsCommandList* cmdList = params.cmdList;
-
-    cmdList->SetGraphicsRootSignature(m_rootSignature);
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::FrameCBIndex, params.frameConstantsGPUAddress);
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::LightCBIndex, params.lightConstantsGPUAddress);
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, GetInstanceDataGPUHandle());
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_heapAllocator->GetGPUHandle(0));
-    cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_heapAllocator->GetGPUHandle(0));
-
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    if (params.mainVisibleCommandsBuffer && m_mainIndirectCount > 0 && m_psoDepthSolid) {
-        cmdList->SetPipelineState(m_psoDepthSolid);
-        cmdList->ExecuteIndirect(
-            m_commandSignature.Get(),
-            m_mainIndirectCount,
-            params.mainVisibleCommandsBuffer,
-            0,
-            params.mainCounterBuffer,
-            0
-        );
-    }
-
-    if (params.vaseVisibleCommandsBuffer && m_vaseIndirectCount > 0 && m_psoDepthAlpha) {
-        cmdList->SetPipelineState(m_psoDepthAlpha);
-        cmdList->ExecuteIndirect(
-            m_commandSignature.Get(),
-            m_vaseIndirectCount,
-            params.vaseVisibleCommandsBuffer,
-            0,
-            params.vaseCounterBuffer,
-            0
-        );
-    }
-} // SubmitIndirectDepth
 
 void                        Sponza::SetPosition(const XMFLOAT3& pos) { m_Transform.SetPosition(pos); } // SetPosition
 void                        Sponza::SetPosition(float x, float y, float z) { m_Transform.SetPosition(x, y, z); } // SetPosition

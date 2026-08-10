@@ -54,7 +54,7 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
-    if (!BuildOcclusionCullingCompute(SharedCommons::OCCLUSION_CULLING_SIG, SharedCommons::OCCLUSION_CULLING_CS)) {
+    if (!BuildOcclusionCullingCompute(SharedCommons::KEY_OCCLUSION_CULLING_SIG, SharedCommons::OCCLUSION_CULLING_CS)) {
         DebugHelper::DebugPrint("OcclusionCulling PSO 빌드 실패");
         return false;
     }
@@ -356,7 +356,7 @@ bool PSOManager::BuildOcclusionCullingCompute(const std::string& signatureKey, c
         return false;
     }
 
-    m_psoMap[SharedCommons::OCCLUSION_CULLING_PSO] = std::move(pso);
+    m_psoMap[SharedCommons::KEY_OCCLUSION_CULLING_PSO] = std::move(pso);
     return true;
 } // BuildOcclusionCullingCompute
 
