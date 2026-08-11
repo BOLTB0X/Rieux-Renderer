@@ -43,8 +43,8 @@ public:
     DirectX::XMFLOAT3 GetPosition() const;
     DirectX::XMFLOAT3 GetRotation() const;
     DirectX::XMMATRIX GetViewMatrix() const;
-    DirectX::XMMATRIX GetProjectionMatrix() const;
-    DirectX::XMMATRIX GetCullingProjectionMatrix() const;
+    DirectX::XMMATRIX GetReverseZProjectionMatrix() const;
+    DirectX::XMMATRIX GetStandardZProjectionMatrix() const;
     DirectX::XMVECTOR GetForwardVector() const;
     DirectX::XMVECTOR GetRightVector() const;
     DirectX::XMVECTOR GetUpVector() const;

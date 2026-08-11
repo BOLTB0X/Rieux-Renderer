@@ -1,5 +1,6 @@
 // GPU_PBRModelVS.hlsl
 #include "Commons.hlsli"
+#include "GPUDriven.hlsli"
 
 struct PBRVertex
 {
@@ -9,31 +10,6 @@ struct PBRVertex
     float3 tangent;
     float3 binormal;
 }; // PBRVertex
-
-struct MeshInstanceData
-{
-    matrix worldMatrix;
-    uint vertexBufferIndex;
-    uint albedoIndex;
-    uint normalIndex;
-    uint alphaIndex;
-
-    float3 aabbMin;
-    float mPadding1;
-    float3 aabbMax;
-    float mPadding2;
-
-    float isVase;
-    float3 mPadding3;
-}; //
-
-StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
-StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
-
-cbuffer InstanceCB : register(b2)
-{
-    uint InstanceIndex;
-}; // InstanceCB
 
 struct VS_OUT
 {
@@ -45,9 +21,13 @@ struct VS_OUT
     float2 texcoord : TEXCOORD;
 }; // VS_OUT
 
+StructuredBuffer<PBRVertex>        g_VertexBuffers[] : register(t0, space2);
+StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
+ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
+
 VS_OUT main(uint vertexID : SV_VertexID)
 {
-    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    MeshInstanceData inst = g_InstanceData[g_InstanceCB.InstanceIndex];
     PBRVertex input = g_VertexBuffers[inst.vertexBufferIndex][vertexID];
     
     VS_OUT output;

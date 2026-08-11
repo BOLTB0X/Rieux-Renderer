@@ -139,50 +139,40 @@ void FrustumCuller::ReadbackToCPU(ID3D12GraphicsCommandList* cmdList) {
     cmdList->ResourceBarrier(2, back);
 } // ReadbackToCPU
 
-void FrustumCuller::OnGUI() {
-    UINT* pMain = nullptr;
-    if (SUCCEEDED(m_mainReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMain)))) {
-        m_cachedMainVisibleCount = *pMain;
-        m_mainReadbackBuffer->Unmap(0, nullptr);
-    }
-    UINT* pVase = nullptr;
-    if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVase)))) {
-        m_cachedVaseVisibleCount = *pVase;
-        m_vaseReadbackBuffer->Unmap(0, nullptr);
-    }
-
-    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ FrustumCuller Options ]");
-    ImGui::Text("Main Visible: %u", m_cachedMainVisibleCount);
-    ImGui::Text("Vase Visible: %u", m_cachedVaseVisibleCount);
-    ImGui::Separator();
-} // OnGUI
-
 Frustum*        FrustumCuller::GetFrustum() const { return m_frustum.get(); }
 ID3D12Resource* FrustumCuller::GetMainVisibleCommandsBuffer() const { return m_mainVisibleCommandsBuffer.Get(); }
 ID3D12Resource* FrustumCuller::GetVaseVisibleCommandsBuffer() const { return m_vaseVisibleCommandsBuffer.Get(); }
 ID3D12Resource* FrustumCuller::GetMainCounterBuffer() const { return m_mainCounterBuffer.Get(); }
 ID3D12Resource* FrustumCuller::GetVaseCounterBuffer() const { return m_vaseCounterBuffer.Get(); }
 
+UINT            FrustumCuller::GetMainVisibleCommandsSRVIndex() const { return m_mainVisibleSRVIndex; }
+UINT            FrustumCuller::GetVaseVisibleCommandsSRVIndex() const { return m_vaseVisibleSRVIndex; }
+UINT            FrustumCuller::GetMainCounterSRVIndex() const { return m_mainCounterSRVIndex; }
+UINT            FrustumCuller::GetVaseCounterSRVIndex() const { return m_vaseCounterSRVIndex; }
+
 void FrustumCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount,
-    ComPtr<ID3D12Resource>& outVisibleBuf, UINT& outVisibleDescIdx,
-    ComPtr<ID3D12Resource>& outCounterBuf, UINT& outCounterDescIdx) {
+    Microsoft::WRL::ComPtr<ID3D12Resource>& outVisibleBuf, UINT& outVisibleUAVIdx, UINT& outVisibleSRVIdx,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& outCounterBuf, UINT& outCounterUAVIdx, UINT& outCounterSRVIdx) {
 
     UINT commandStructSize = sizeof(GPUCommons::IndirectCommand);
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
 
+    // 1. Visible Buffer 생성
     CD3DX12_RESOURCE_DESC visibleDesc = CD3DX12_RESOURCE_DESC::Buffer(
         commandStructSize * maxCount, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &visibleDesc,
         D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outVisibleBuf));
 
+    // 2. Counter Buffer 생성
     CD3DX12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
         sizeof(UINT), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
         D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outCounterBuf));
 
-    // Visible Commands UAV
-    // Structured Buffer 형태
-    outVisibleDescIdx = m_heapAllocator->Allocate();
+    // ==========================================
+    // Visible Commands UAV & SRV (Structured Buffer)
+    // ==========================================
+    outVisibleUAVIdx = m_heapAllocator->Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDescView = {};
     uavDescView.Format = DXGI_FORMAT_UNKNOWN;
     uavDescView.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
@@ -191,20 +181,45 @@ void FrustumCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount,
     uavDescView.Buffer.StructureByteStride = commandStructSize;
     uavDescView.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     device->CreateUnorderedAccessView(outVisibleBuf.Get(), nullptr, &uavDescView,
-        m_heapAllocator->GetCPUHandle(outVisibleDescIdx));
+        m_heapAllocator->GetCPUHandle(outVisibleUAVIdx));
 
-    // Counter UAV
-    // RWByteAddressBuffer / RAW 형태
-    outCounterDescIdx = m_heapAllocator->Allocate();
+    outVisibleSRVIdx = m_heapAllocator->Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDescView = {};
+    srvDescView.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDescView.Format = DXGI_FORMAT_UNKNOWN;
+    srvDescView.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    srvDescView.Buffer.FirstElement = 0;
+    srvDescView.Buffer.NumElements = maxCount;
+    srvDescView.Buffer.StructureByteStride = commandStructSize;
+    srvDescView.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    device->CreateShaderResourceView(outVisibleBuf.Get(), &srvDescView,
+        m_heapAllocator->GetCPUHandle(outVisibleSRVIdx));
+
+    // ==========================================
+    // Counter UAV & SRV (RAW Buffer)
+    // ==========================================
+    outCounterUAVIdx = m_heapAllocator->Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC counterUavDesc = {};
     counterUavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
     counterUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     counterUavDesc.Buffer.FirstElement = 0;
-    counterUavDesc.Buffer.NumElements = 1; // 32비트(4바이트) 요소의 개수
+    counterUavDesc.Buffer.NumElements = 1;
     counterUavDesc.Buffer.StructureByteStride = 0;
     counterUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
     device->CreateUnorderedAccessView(outCounterBuf.Get(), nullptr, &counterUavDesc,
-        m_heapAllocator->GetCPUHandle(outCounterDescIdx));
+        m_heapAllocator->GetCPUHandle(outCounterUAVIdx));
+
+    outCounterSRVIdx = m_heapAllocator->Allocate();
+    D3D12_SHADER_RESOURCE_VIEW_DESC counterSrvDesc = {};
+    counterSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    counterSrvDesc.Format = DXGI_FORMAT_R32_TYPELESS;
+    counterSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    counterSrvDesc.Buffer.FirstElement = 0;
+    counterSrvDesc.Buffer.NumElements = 1;
+    counterSrvDesc.Buffer.StructureByteStride = 0;
+    counterSrvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+    device->CreateShaderResourceView(outCounterBuf.Get(), &counterSrvDesc,
+        m_heapAllocator->GetCPUHandle(outCounterSRVIdx));
 } // BuildGroupResources
 
 void FrustumCuller::BuildBuffers(ID3D12Device* device) {
@@ -228,8 +243,13 @@ void FrustumCuller::BuildBuffers(ID3D12Device* device) {
     }
 
     // main/vase 각각의 visible+counter 버퍼/UAV 생성
-    BuildGroupResources(device, m_maxMainCount, m_mainVisibleCommandsBuffer, m_mainVisibleDescIndex, m_mainCounterBuffer, m_mainCounterDescIndex);
-    BuildGroupResources(device, m_maxVaseCount, m_vaseVisibleCommandsBuffer, m_vaseVisibleDescIndex, m_vaseCounterBuffer, m_vaseCounterDescIndex);
+    BuildGroupResources(device, m_maxMainCount,
+        m_mainVisibleCommandsBuffer, m_mainVisibleDescIndex, m_mainVisibleSRVIndex,
+        m_mainCounterBuffer, m_mainCounterDescIndex, m_mainCounterSRVIndex);
+
+    BuildGroupResources(device, m_maxVaseCount,
+        m_vaseVisibleCommandsBuffer, m_vaseVisibleDescIndex, m_vaseVisibleSRVIndex,
+        m_vaseCounterBuffer, m_vaseCounterDescIndex, m_vaseCounterSRVIndex);
 
     // Readback (main/vase 각각)
     CD3DX12_HEAP_PROPERTIES readbackHeap(D3D12_HEAP_TYPE_READBACK);
@@ -239,3 +259,21 @@ void FrustumCuller::BuildBuffers(ID3D12Device* device) {
     device->CreateCommittedResource(&readbackHeap, D3D12_HEAP_FLAG_NONE, &readbackDesc,
         D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&m_vaseReadbackBuffer));
 } // BuildBuffers
+
+void FrustumCuller::OnGUI() {
+    UINT* pMain = nullptr;
+    if (SUCCEEDED(m_mainReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pMain)))) {
+        m_cachedMainVisibleCount = *pMain;
+        m_mainReadbackBuffer->Unmap(0, nullptr);
+    }
+    UINT* pVase = nullptr;
+    if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&pVase)))) {
+        m_cachedVaseVisibleCount = *pVase;
+        m_vaseReadbackBuffer->Unmap(0, nullptr);
+    }
+
+    ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ FrustumCuller Options ]");
+    ImGui::Text("Main Visible: %u", m_cachedMainVisibleCount);
+    ImGui::Text("Vase Visible: %u", m_cachedVaseVisibleCount);
+    ImGui::Separator();
+} // OnGUI

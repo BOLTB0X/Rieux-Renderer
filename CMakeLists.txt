@@ -58,9 +58,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Components"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Data"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Tool"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/World"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/Graphics/Techniques"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/World/"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/Utils"
-    "${PIX_INCLUDE_DIR}" # PIX 헤더 경로 추가
+)
+
+target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE 
+    "${PIX_INCLUDE_DIR}"
 )
 
 # 라이브러리 연결

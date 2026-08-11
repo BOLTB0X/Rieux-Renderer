@@ -138,7 +138,7 @@ bool D3D12RootSignature::Init(const InitParams& params) {
 
 ID3D12RootSignature* D3D12RootSignature::GetRootSignature() const {
 	return m_rootSignature.Get();
-} // GetRootSignature
+} // GetID3D12RootSignature
 
 UINT D3D12RootSignature::GetParamIndex(const std::string& tag) const {
     auto it = m_paramIndexMap.find(tag);

@@ -53,10 +53,10 @@ namespace SharedCommons {
 
 namespace SharedCommons {
     static const std::wstring DEBUG_LINE_VS = L"HLSL/DebugLineVS.hlsl";
-    static const std::wstring DEBUG_LINE_PS = L"HLSL/DebugLinePS.hlsl";
+    static const std::wstring DEBUG_COLOR_PS = L"HLSL/DebugColorPS.hlsl";
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
-    static const std::wstring SPONZA_PS = L"HLSL/SponzaPS.hlsl";
+    static const std::wstring CPU_SPONZA_PS = L"HLSL/CPU_SponzaPS.hlsl";
     static const std::wstring SPONZA_FLAT_PS = L"HLSL/FlatSponzaPS.hlsl";
 
     static const std::string  CPU_SPONZA_VS_STR = "CPUSponzaVS";
@@ -70,6 +70,29 @@ namespace SharedCommons {
 
     static const std::wstring CULLING_CS = L"HLSL/FrustumCullingCS.hlsl";
     static const std::string  CULLING_CS_STR = "FrustumCullingCS";
+
+    static const std::wstring DEPTH_VS = L"HLSL/DepthVS.hlsl";
+    static const std::wstring DEPTH_PS = L"HLSL/DepthPS.hlsl";
+
+    static const std::string  DEPTH_VS_STR = "DepthVS";
+    static const std::string  DEPTH_PS_STR = "DepthPS";
+
+    static const std::wstring FULLSCREEN_VS = L"HLSL/FullScreenVS.hlsl";
+    static const std::wstring LINEAR_Z_TRANS_PS = L"HLSL/LinearZTransPS.hlsl";
+
+    static const std::string  FULLSCREEN_VS_STR = "FullScreenVS";
+    static const std::string  LINEAR_Z_TRANS_PS_STR = "LinearZTransPS";
+
+    static const std::wstring HIERARCHICAL_Z_CS = L"HLSL/HierarchicalZCS.hlsl";
+    static const std::string  HIERARCHICAL_Z_CS_STR = "HierarchicalZCS";
+
+    static const std::wstring OCCLUSION_CULLING_CS = L"HLSL/OcclusionCullingCS.hlsl";
+    static const std::string  OCCLUSION_CULLING_CS_STR = "OcclusionCullingCS";
+
+    inline const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
+    inline const std::string DEBUG_AABB_VS_STR ="DebugAABBVS_str";
+    inline const std::string DEBUG_COLOR_PS_STR = "DebugColorPS_str";
+
 } // HLSL
 
 namespace SharedCommons {
@@ -94,6 +117,26 @@ namespace SharedCommons {
 
     static const std::string  KEY_CULLING_CS = "FrustumCullingCS";
     static const std::string  KEY_CULLING_SIG = "FrustumCullingCS_SIG";
+
+    static const std::string  KEY_GPU_DEPTH_SOLID_CULL = "GPU_DEPTH_SOLID_CULL";
+    static const std::string  KEY_GPU_DEPTH_ALPHA_NO_CULL = "GPU_DEPTH_ALPHA_NO_CULL";
+    static const std::string  KEY_DEPTH_RECORD_SIG = "DepthRecord_SIG";
+
+    static const std::string  KEY_HIERARCHICAL_Z_SIG = "HierarchicalZ_SIG";
+    static const std::string  KEY_HIERARCHICAL_Z_CS_SIG = "HierarchicalZCS_SIG";
+
+    static const std::string  KEY_DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
+    static const std::string  KEY_DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
+    static const std::string  KEY_HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
+
+    static const std::string  KEY_TRANS_REVERSE_Z_SIG = "Trans_ReverseZ_SIG";
+    static const std::string  KEY_TRANS_REVERSE_Z_PSO = "Trans_ReverseZ";
+
+    static const std::string KEY_OCCLUSION_CULLING_SIG = "OcclusionCullingCS_SIG";
+    static const std::string KEY_OCCLUSION_CULLING_PSO = "OcclusionCullingCS_PSO";
+
+    inline const std::string KEY_DEBUG_AABB_SIG = "DebugAABBSignature";
+    inline const std::string KEY_DEBUG_AABB_PSO = "DebugAABBPso";
 
 } // MAP - KEY
 
@@ -134,22 +177,3 @@ namespace SharedCommons {
     static constexpr float                    ALPHA_FACTOR = 0.5f;
 
 } // Assimp Tex
-
-namespace SharedCommons {
-
-    struct GPUMeshData {
-        uint32_t vertexOffset;
-        uint32_t indexOffset;
-        uint32_t indexCount;
-        uint32_t materialIndex;
-    }; // GPUMeshData
-
-    struct IndirectCommand {
-        uint32_t IndexCountPerInstance;
-        uint32_t InstanceCount;
-        uint32_t StartIndexLocation;
-        uint32_t BaseVertexLocation;
-        uint32_t StartInstanceLocation;
-    }; // IndirectCommand
-
-}; // 구조체

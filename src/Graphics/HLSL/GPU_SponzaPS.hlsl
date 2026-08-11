@@ -1,5 +1,6 @@
 // GPU_SponzaPS.hlsl
 #include "Commons.hlsli"
+#include "GPUDriven.hlsli"
 
 struct PS_IN
 {
@@ -11,35 +12,14 @@ struct PS_IN
     float2 texcoord : TEXCOORD;
 }; // PS_IN
 
-struct MeshInstanceData
-{
-    matrix worldMatrix;
-    uint   vertexBufferIndex;
-    uint   albedoIndex;
-    uint   normalIndex;
-    uint   alphaIndex;
-
-    float3 aabbMin;
-    float  mPadding1;
-    float3 aabbMax;
-    float  mPadding2;
-
-    float  isVase;
-    float3 mPadding3;
-}; // MeshInstanceData
-
 Texture2D                          g_Textures[] : register(t0, space1);
 StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
 SamplerState                       Sampler : register(s0);
-
-cbuffer InstanceCB : register(b2)
-{
-    uint InstanceIndex;
-}; // InstanceCB
+ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
 
 float4 main(PS_IN input) : SV_TARGET
 {
-    MeshInstanceData inst = g_InstanceData[InstanceIndex];
+    MeshInstanceData inst = g_InstanceData[g_InstanceCB.InstanceIndex];
     
     float4 alphaSample = g_Textures[inst.alphaIndex].Sample(Sampler, input.texcoord);
     if (alphaSample.r < 0.1f)

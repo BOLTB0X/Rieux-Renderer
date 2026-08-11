@@ -7,6 +7,7 @@
 #include <string>
 
 class ImGuiWidget;
+class DescriptorHeapAllocator;
 
 class ImGuiManager {
 public:
@@ -15,8 +16,9 @@ public:
         ID3D12Device* device;
         int           numFramesInFlight;
         DXGI_FORMAT   rtvFormat;
+		DescriptorHeapAllocator* heapAllocator;
 
-        InitParams() : hwnd(nullptr), device(nullptr), numFramesInFlight(0), rtvFormat{} {
+        InitParams() : hwnd(nullptr), device(nullptr), numFramesInFlight(0), rtvFormat{}, heapAllocator(nullptr) {
         }
     }; // InitDefaultParams
 
@@ -41,10 +43,12 @@ public:
     void SetCameraLocked(bool);
     bool SetWorldClicked(bool) const;
 
+    D3D12_GPU_DESCRIPTOR_HANDLE RegisterTexture(ID3D12Device*, ID3D12Resource*, DXGI_FORMAT);
+
 private:
     bool                                         m_isInitialized;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_srvHeap;
     std::vector<std::unique_ptr<ImGuiWidget>>    m_widgets;
     bool                                         m_isCameraLocked;
     bool                                         m_showUI;
+    DescriptorHeapAllocator*                     m_heapAllocator;
 }; // ImGuiManager

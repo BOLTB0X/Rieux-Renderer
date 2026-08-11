@@ -32,7 +32,8 @@ public:
         ID3D12Resource*            vaseIndirectBuffer;
 
         DispatchParams()
-			: cmdList(nullptr), instanceDataBuffer(nullptr), instanceDescIndex(UINT_MAX), masterIndirectDescriptorIndex(UINT_MAX)
+			: cmdList(nullptr), instanceDataBuffer(nullptr),
+            instanceDescIndex(UINT_MAX), masterIndirectDescriptorIndex(UINT_MAX)
             , mainIndirectBuffer(nullptr), vaseIndirectBuffer(nullptr) {
         }
     }; // DispatchParams
@@ -50,18 +51,23 @@ public:
 
 public:
     void            OnGUI();
-    Frustum* GetFrustum() const;
+    Frustum*        GetFrustum() const;
 
     ID3D12Resource* GetMainVisibleCommandsBuffer() const;
     ID3D12Resource* GetVaseVisibleCommandsBuffer() const;
     ID3D12Resource* GetMainCounterBuffer()         const;
     ID3D12Resource* GetVaseCounterBuffer()         const;
 
+    UINT            GetMainVisibleCommandsSRVIndex() const;
+    UINT            GetVaseVisibleCommandsSRVIndex() const;
+    UINT            GetMainCounterSRVIndex() const;
+    UINT            GetVaseCounterSRVIndex() const;
+
 private:
     void BuildBuffers(ID3D12Device*);
     void BuildGroupResources(ID3D12Device*, UINT,
-        Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&,
-        Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&);
+        Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&, UINT&,
+        Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&, UINT&);
 
 private:
     std::unique_ptr<Frustum>               m_frustum;
@@ -76,12 +82,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_mainCounterBuffer;
     UINT                                   m_mainVisibleDescIndex;
     UINT                                   m_mainCounterDescIndex;
+    UINT                                   m_mainVisibleSRVIndex;
+    UINT                                   m_mainCounterSRVIndex;
 
     // Vase 그룹
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vaseVisibleCommandsBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vaseCounterBuffer;
     UINT                                   m_vaseVisibleDescIndex;
     UINT                                   m_vaseCounterDescIndex;
+    UINT                                   m_vaseVisibleSRVIndex;
+    UINT                                   m_vaseCounterSRVIndex;
 
     Microsoft::WRL::ComPtr<ID3D12Resource> m_counterResetBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_mainReadbackBuffer;
