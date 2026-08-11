@@ -1,4 +1,4 @@
-// DebugLinePS.hlsl
+// DebugColorPS.hlsl
 struct PS_IN
 {
     float4 positionCS : SV_POSITION;

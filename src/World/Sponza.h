@@ -11,12 +11,14 @@ class Sponza : public AssimpModel {
 public:
     struct InitParams : public AssimpModel::InitParams {
         ID3D12RootSignature* rootSignature = nullptr;
+        ID3D12RootSignature* debugRootSignature = nullptr;
         ID3D12PipelineState* psoSolidCull = nullptr;
         ID3D12PipelineState* psoSolidNoCull = nullptr;
         ID3D12PipelineState* psoWireCull = nullptr;
         ID3D12PipelineState* psoWireNoCull = nullptr;
         ID3D12PipelineState* psoDepthSolid = nullptr;
         ID3D12PipelineState* psoDepthAlpha = nullptr;
+        ID3D12PipelineState* psoDebug = nullptr;
     }; // InitDefaultParams
 
     enum class SubmitIndirectType {
@@ -47,12 +49,27 @@ public:
         }
     }; // SubmitIndirectParams
 
+    struct RenderDebugParams {
+        ID3D12GraphicsCommandList* cmdList;
+        D3D12_GPU_VIRTUAL_ADDRESS  frameConstantsGPUAddress;
+        ID3D12Resource*            mainCmdBuffer;
+        ID3D12Resource*            mainCounter;
+        ID3D12Resource*            vaseCmdBuffer;
+        ID3D12Resource*            vaseCounter;
+
+        RenderDebugParams() : cmdList(nullptr), frameConstantsGPUAddress(0),
+            mainCmdBuffer(nullptr), mainCounter(nullptr),
+            vaseCmdBuffer(nullptr), vaseCounter(nullptr) {
+        }
+    }; // RenderDebugParams
+
 public:
     Sponza();
     virtual ~Sponza();
 
     bool                        Init(const InitParams&);
     void                        SubmitIndirect(const SubmitIndirectParams&);
+    void                        RenderDebugAABB(const RenderDebugParams&);
     void                        OnGUI();
 
 public:
@@ -73,6 +90,7 @@ public:
 private:
     bool BuildInstanceDataBuffer(ID3D12Device*, const int, const float, bool);
     bool BuildIndirectBuffers(ID3D12Device*, ID3D12RootSignature*, const int);
+    bool BuildDebugCommandSignature(ID3D12Device*);
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_instanceDataBuffer;
@@ -80,15 +98,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_masterIndirectBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_mainIndirectBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource>         m_vaseIndirectBuffer;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> m_debugCommandSignature;
 
     D3D12_VERTEX_BUFFER_VIEW                       m_instanceDataSRV;
     ID3D12RootSignature*                           m_rootSignature;
+    ID3D12RootSignature*                           m_debugRootSignature;
     ID3D12PipelineState*                           m_psoSolidCull;
     ID3D12PipelineState*                           m_psoSolidNoCull;
     ID3D12PipelineState*                           m_psoWireCull;
     ID3D12PipelineState*                           m_psoWireNoCull;
     ID3D12PipelineState*                           m_psoDepthSolid;
     ID3D12PipelineState*                           m_psoDepthAlpha;
+    ID3D12PipelineState*                           m_psoDebug;
 
     DescriptorHeapAllocator*                       m_heapAllocator;
 
@@ -100,5 +121,6 @@ private:
     UINT                                           m_vaseIndirectCount;
 
     bool                                           m_freezeCulling;
+    bool                                           m_showDebugAABB;
     Transform                                      m_Transform;
 }; // Sponza

@@ -19,22 +19,31 @@ using namespace Microsoft::WRL;
 using namespace DirectX;
 
 Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{}, m_instanceDataDescriptorIndex(0),
-    m_masterIndirectDescriptorIndex(0), m_mainIndirectCount(0), m_vaseIndirectCount(0), m_freezeCulling(false) {
+    m_masterIndirectDescriptorIndex(0), m_mainIndirectCount(0), m_vaseIndirectCount(0),
+    m_freezeCulling(false), m_showDebugAABB(false) {
 	m_Transform.SetPosition(0.0f, 0.0f, 0.0f);
 	m_rootSignature = nullptr;
+    m_debugRootSignature = nullptr;
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
     m_psoWireCull = nullptr;
     m_psoWireNoCull = nullptr;
+    m_psoDepthAlpha = nullptr;
+    m_psoDepthSolid = nullptr;
+    m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // Sponza
 
 Sponza::~Sponza() {
 	m_rootSignature = nullptr;
+    m_debugRootSignature = nullptr;
     m_psoSolidCull = nullptr;
     m_psoSolidNoCull = nullptr;
     m_psoWireCull = nullptr;
     m_psoWireNoCull = nullptr;
+    m_psoDepthAlpha = nullptr;
+    m_psoDepthSolid = nullptr;
+    m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // ~Sponza
 
@@ -45,6 +54,7 @@ bool Sponza::Init(const InitParams& params) {
     }
 
 	m_rootSignature = params.rootSignature;
+    m_debugRootSignature = params.debugRootSignature;
     m_heapAllocator = params.heapAllocator;
 
     if (!AssimpModel::Init(params)) {
@@ -61,12 +71,18 @@ bool Sponza::Init(const InitParams& params) {
         return false;
     }
 
+    if (!BuildDebugCommandSignature(params.device)) {
+        DebugHelper::DebugPrint("Debug CommandSignature 생성 실패");
+        return false;
+    }
+
     m_psoSolidCull = params.psoSolidCull;
     m_psoSolidNoCull = params.psoSolidNoCull;
     m_psoWireCull = params.psoWireCull;
     m_psoWireNoCull = params.psoWireNoCull;
 	m_psoDepthSolid = params.psoDepthSolid;
 	m_psoDepthAlpha = params.psoDepthAlpha;
+    m_psoDebug = params.psoDebug;
     return true;
 } // Init
 
@@ -94,9 +110,6 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
         sidePSO = m_psoDepthAlpha;
     }
 
- /*   ID3D12PipelineState* mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
-    ID3D12PipelineState* vasePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;*/
-
     if (params.mainVisibleCommandsBuffer && m_mainIndirectCount > 0) {
         cmdList->SetPipelineState(mainPSO);
         cmdList->ExecuteIndirect(
@@ -121,6 +134,43 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
         );
     }
 } // SubmitIndirect
+
+void Sponza::RenderDebugAABB(const RenderDebugParams& params) {
+    if (!m_showDebugAABB || !m_psoDebug || !m_debugCommandSignature)
+        return;
+
+    ID3D12GraphicsCommandList* cmdList = params.cmdList;
+
+    cmdList->SetGraphicsRootSignature(m_debugRootSignature);
+    cmdList->SetPipelineState(m_psoDebug);
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::DebugFrameIndex, params.frameConstantsGPUAddress);
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DebugInstanceDataIndex, GetInstanceDataGPUHandle());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+
+    // 원본 버퍼를 모두 빨간색으로 그리기
+    uint32_t passTypeAll = 0; // 0: Red
+    // RootConstants 중 두 번째(Offset 1) 값만 덮어씀
+    cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugInstanceIndex, 1, &passTypeAll, 1);
+
+    // 원본 버퍼는 Counter가 없으므로 Max 카운트만큼 전부 그림
+    if (m_mainIndirectBuffer.Get()) {
+        cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_mainIndirectCount, m_mainIndirectBuffer.Get(), 0, nullptr, 0);
+    }
+    if (m_vaseIndirectBuffer.Get()) {
+        cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_vaseIndirectCount, m_vaseIndirectBuffer.Get(), 0, nullptr, 0);
+    }
+
+    // 컬링 통과한 버퍼를 그 위에 초록/노란색으로 덧그리기
+    uint32_t passTypeVisible = 1; // 1: Green/Yellow
+    cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugInstanceIndex, 1, &passTypeVisible, 1);
+
+    if (params.mainCmdBuffer && m_mainIndirectCount > 0) {
+        cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_mainIndirectCount, params.mainCmdBuffer, 0, params.mainCounter, 0);
+    }
+    if (params.vaseCmdBuffer && m_vaseIndirectCount > 0) {
+        cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_vaseIndirectCount, params.vaseCmdBuffer, 0, params.vaseCounter, 0);
+    }
+} // RenderDebugAABB
 
 void                        Sponza::SetPosition(const XMFLOAT3& pos) { m_Transform.SetPosition(pos); } // SetPosition
 void                        Sponza::SetPosition(float x, float y, float z) { m_Transform.SetPosition(x, y, z); } // SetPosition
@@ -326,9 +376,30 @@ bool Sponza::BuildIndirectBuffers(ID3D12Device* device, ID3D12RootSignature* roo
     return true;
 } // BuildIndirectBuffers
 
+bool Sponza::BuildDebugCommandSignature(ID3D12Device* device) {
+    D3D12_INDIRECT_ARGUMENT_DESC args[3] = {};
+
+    args[0].Type = D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW;
+
+    args[1].Type = D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT;
+    args[1].Constant.RootParameterIndex = RendererState::DebugInstanceIndex;
+    args[1].Constant.Num32BitValuesToSet = 1;
+    args[1].Constant.DestOffsetIn32BitValues = 0;
+
+    args[2].Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+
+    D3D12_COMMAND_SIGNATURE_DESC csDesc = {};
+    csDesc.ByteStride = sizeof(GPUCommons::IndirectCommand);
+    csDesc.NumArgumentDescs = _countof(args);
+    csDesc.pArgumentDescs = args;
+
+    return SUCCEEDED(device->CreateCommandSignature(&csDesc, m_debugRootSignature, IID_PPV_ARGS(&m_debugCommandSignature)));
+} // BuildDebugCommandSignature
+
 void Sponza::OnGUI() {
     ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Sponza Options ]");
     ImGui::Checkbox("Wireframe Mode", &m_enableWireframe);
+    ImGui::Checkbox("Show Culling Bounds (AABB)", &m_showDebugAABB);
     ImGui::Separator();
     ImGui::Text("Visible Mesh: %u / %d", GetVisibleCount(), GetMeshCount());
     ImGui::Separator();

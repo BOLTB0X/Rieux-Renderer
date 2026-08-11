@@ -53,7 +53,7 @@ namespace SharedCommons {
 
 namespace SharedCommons {
     static const std::wstring DEBUG_LINE_VS = L"HLSL/DebugLineVS.hlsl";
-    static const std::wstring DEBUG_LINE_PS = L"HLSL/DebugLinePS.hlsl";
+    static const std::wstring DEBUG_COLOR_PS = L"HLSL/DebugColorPS.hlsl";
 
     static const std::wstring PBR_VS = L"HLSL/PBRModelVS.hlsl";
     static const std::wstring CPU_SPONZA_PS = L"HLSL/CPU_SponzaPS.hlsl";
@@ -90,6 +90,8 @@ namespace SharedCommons {
     static const std::string  OCCLUSION_CULLING_CS_STR = "OcclusionCullingCS";
 
     inline const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
+    inline const std::string DEBUG_AABB_VS_STR ="DebugAABBVS_str";
+    inline const std::string DEBUG_COLOR_PS_STR = "DebugColorPS_str";
 
 } // HLSL
 

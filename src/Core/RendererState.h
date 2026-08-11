@@ -64,6 +64,10 @@ public: // Screen
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 
+    static UINT DebugFrameIndex;
+    static UINT DebugInstanceIndex;
+    static UINT DebugInstanceDataIndex;
+
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
     static UINT DSVCapacity;

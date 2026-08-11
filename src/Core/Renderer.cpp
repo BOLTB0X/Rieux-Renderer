@@ -305,12 +305,14 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.path = SharedCommons::SPONZA_PATH;
     sponzaInitParams.heapAllocator = m_sharedDescriptorAllocator.get();
     sponzaInitParams.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_GPU_SPONZA_SIG);
+    sponzaInitParams.debugRootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_DEBUG_AABB_SIG);
     sponzaInitParams.psoSolidCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoSolidNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_SOLID_NO_CULL)->GetPSO();
     sponzaInitParams.psoWireCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_CULL)->GetPSO();
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.psoDepthSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoDepthAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
         return false;
@@ -378,10 +380,10 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
         [this]() { m_Camera->OnGUI(); }
     ));
 
-    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-    //    "Sponza GUI",
-    //    [this]() { m_Sponza->OnGUI(); }
-    //));
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Sponza GUI",
+        [this]() { m_Sponza->OnGUI(); }
+    ));
 
     //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
     //    "Frustum Culler GUI",
@@ -514,7 +516,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     // ==========================================
     // 디버깅
     // ==========================================
-    PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
+    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
     {
         auto debugDepthTex = m_RenderTextureManager->CreateRenderTexture(
             "Depth_Debug",
@@ -546,7 +548,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
         debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
-    PIXEndEvent(cmdList);
+    PIXEndEvent(cmdList);*/
 
     // ==========================================
     // Hi-Z 텍스처 빌드 패스 실행
@@ -562,7 +564,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     // ==========================================
     // Hi-Z 디버깅 (Reverse-Z 선형 변환 패스)
     // ==========================================
-    PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
+    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
     {
         auto hizTexture = hizParams.hizTexture;
 
@@ -602,7 +604,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
         hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
-    PIXEndEvent(cmdList);
+    PIXEndEvent(cmdList);*/
 } // DepthPass
 
 void Renderer::OcclusionPass(ID3D12GraphicsCommandList* cmdList) {
@@ -644,6 +646,20 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
     submitParams.type = Sponza::SubmitIndirectType::General;
     m_Sponza->SubmitIndirect(submitParams);
+
+    PIXEndEvent(cmdList);
+
+    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Debug AABB Pass");
+
+    Sponza::RenderDebugParams debugParams;
+    debugParams.cmdList = cmdList;
+    debugParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    debugParams.mainCmdBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
+    debugParams.mainCounter = m_OcclusionCuller->GetFinalMainCounterBuffer();
+    debugParams.vaseCmdBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
+    debugParams.vaseCounter = m_OcclusionCuller->GetFinalVaseCounterBuffer();
+
+    m_Sponza->RenderDebugAABB(debugParams);
 
     PIXEndEvent(cmdList);
 } // SponzaPass

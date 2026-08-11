@@ -53,6 +53,10 @@ UINT  RendererState::OcclusionFinalVaseCountIndex = 20;
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 
+UINT  RendererState::DebugFrameIndex = 11;
+UINT  RendererState::DebugInstanceIndex = 12;
+UINT  RendererState::DebugInstanceDataIndex = 13;
+
 UINT  RendererState::SharedHeapCapacity = 1024;
 
 UINT  RendererState::RTVCapacity = 64;

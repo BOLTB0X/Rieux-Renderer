@@ -49,13 +49,18 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
-    if (!BuildTransReverseZ(SharedCommons::KEY_TRANS_REVERSE_Z_SIG)) {
+    if (!BuildDebugTransReverseZ(SharedCommons::KEY_TRANS_REVERSE_Z_SIG)) {
         DebugHelper::DebugPrint("TransReverseZ Z PSO 빌드 실패");
         return false;
     }
 
     if (!BuildOcclusionCullingCompute(SharedCommons::KEY_OCCLUSION_CULLING_SIG, SharedCommons::OCCLUSION_CULLING_CS)) {
         DebugHelper::DebugPrint("OcclusionCulling PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildDebugAABB(SharedCommons::KEY_DEBUG_AABB_SIG)) {
+        DebugHelper::DebugPrint("BuildDebugAABB PSO 빌드 실패");
         return false;
     }
 
@@ -446,7 +451,7 @@ bool PSOManager::BuildHierarchicalZ(const std::string& signatureKey) {
     return true;
 } // BuildHierarchicalZ
 
-bool PSOManager::BuildTransReverseZ(const std::string& signatureKey) {
+bool PSOManager::BuildDebugTransReverseZ(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
         b.AddConstants("CameraClipCB", 0, 2, D3D12_SHADER_VISIBILITY_PIXEL)      // b0: g_Near, g_Far (32-bit 값 2개)
             .AddSRVTable("DepthTexture", 0, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0) // t0, space0: 원본 뎁스 텍스처
@@ -500,7 +505,55 @@ bool PSOManager::BuildTransReverseZ(const std::string& signatureKey) {
     }
 
     return result;
-} // BuildTransReverseZ
+} // BuildDebugTransReverseZ
+
+bool PSOManager::BuildDebugAABB(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
+        b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)                          // b0: ViewProj 행렬
+            .AddConstants("Debug_InstanceIndex", 2, 2, D3D12_SHADER_VISIBILITY_ALL)  // b2: InstanceIndex
+            .AddSRVTable("InstanceData", 1, D3D12_SHADER_VISIBILITY_ALL, 1, 0);      // t1 space0
+        })) {
+        return false;
+    }
+
+    RendererState::DebugFrameIndex = GetRootParamIndex(signatureKey, "FrameCB");
+    RendererState::DebugInstanceIndex = GetRootParamIndex(signatureKey, "Debug_InstanceIndex");
+    RendererState::DebugInstanceDataIndex = GetRootParamIndex(signatureKey, "InstanceData");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        return false;
+    }
+
+    ComPtr<IDxcBlob> vsBlob, psBlob;
+    if (!ShaderHelper::InitVertexShader(SharedCommons::DEBUG_AABB_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::DEBUG_COLOR_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { nullptr, 0 };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = m_rtvFormat;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+    baseParams.rasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+    baseParams.rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+
+    baseParams.depthStencilState.DepthEnable = true;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL; // Reverse-Z
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->Init(baseParams)) return false;
+
+    m_psoMap[SharedCommons::KEY_DEBUG_AABB_PSO] = std::move(pso);
+    return true;
+} // BuildDebugAABB
 
 bool PSOManager::BuildSolidCullBack(const std::string& psoName, D3D12PipelineState::DefaultInitParams params) {
     params.rasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
