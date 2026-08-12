@@ -33,22 +33,30 @@ public:
         }
     }; // FrameParams
 
-    struct DispatchParams {
+    struct DispatchPhase1Params {
         ID3D12GraphicsCommandList* cmdList;
-        UINT                       hizTextureDescIndex;
+        UINT                       previousHizTextureDescIndex;  // N-1 프레임 HiZ
         UINT                       frustumMainCommandsDescIndex;
         UINT                       frustumVaseCommandsDescIndex;
         UINT                       frustumMainCountDescIndex;
         UINT                       frustumVaseCountDescIndex;
         UINT                       meshInstanceDataDescIndex;
 
-        DispatchParams()
-            : cmdList(nullptr), hizTextureDescIndex(UINT_MAX)
-            , frustumMainCommandsDescIndex(UINT_MAX), frustumVaseCommandsDescIndex(UINT_MAX)
-            , frustumMainCountDescIndex(UINT_MAX), frustumVaseCountDescIndex(UINT_MAX),
-              meshInstanceDataDescIndex(UINT_MAX) {
+        DispatchPhase1Params() : cmdList(nullptr), previousHizTextureDescIndex(0),
+            frustumMainCommandsDescIndex(0), frustumVaseCommandsDescIndex(0),
+            frustumMainCountDescIndex(0), frustumVaseCountDescIndex(0), meshInstanceDataDescIndex(0) {
         }
-    }; // DispatchParams
+    }; // DispatchPhase1Params
+
+    struct DispatchPhase2Params {
+        ID3D12GraphicsCommandList* cmdList;
+        UINT                       currentHizTextureDescIndex;   // N 프레임(방금 만든) HiZ
+        UINT                       meshInstanceDataDescIndex;
+
+        DispatchPhase2Params() : cmdList(nullptr),
+            currentHizTextureDescIndex(0), meshInstanceDataDescIndex(0) {
+        }
+    }; // DispatchPhase2Params
 
 public:
     OcclusionCuller();
@@ -59,7 +67,8 @@ public:
     bool Init(const InitParams&);
     void Frame(const FrameParams&);
 
-    void Dispatch(const DispatchParams&);
+    void DispatchPhase1(const DispatchPhase1Params&);
+    void DispatchPhase2(const DispatchPhase2Params&);
     void ReadbackToCPU(ID3D12GraphicsCommandList*);
     void OnGUI();
 
@@ -81,6 +90,21 @@ private:
 
     // ViewProj 및 화면 크기를 셰이더로 넘길 상수 버퍼
     Microsoft::WRL::ComPtr<ID3D12Resource> m_occlusionConstantBuffer;
+
+    // Phase 1에서 실패한(Culled) 물체들을 담아둘 임시 버퍼 (Phase 2의 입력이 됨)
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_phase1CulledMainCommandsBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_phase1CulledMainCounterBuffer;
+    UINT                                   m_phase1CulledMainUAVIndex;
+    UINT                                   m_phase1CulledMainCounterUAVIndex;
+    UINT                                   m_phase1CulledMainSRVIndex;        // Phase 2에서 읽기 위한 SRV
+    UINT                                   m_phase1CulledMainCounterSRVIndex;
+
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_phase1CulledVaseCommandsBuffer;
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_phase1CulledVaseCounterBuffer;
+    UINT                                   m_phase1CulledVaseUAVIndex;
+    UINT                                   m_phase1CulledVaseCounterUAVIndex;
+    UINT                                   m_phase1CulledVaseSRVIndex;        // Phase 2에서 읽기 위한 SRV
+    UINT                                   m_phase1CulledVaseCounterSRVIndex;
 
     // Main 그룹 (최종 생존자)
     Microsoft::WRL::ComPtr<ID3D12Resource> m_finalMainCommandsBuffer;

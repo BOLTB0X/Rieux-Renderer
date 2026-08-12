@@ -61,6 +61,12 @@ public: // Screen
     static UINT OcclusionFinalMainCountIndex;
     static UINT OcclusionFinalVaseCountIndex;
 
+    static UINT OcclusionPhaseIndex;
+    static UINT OcclusionCulledMainCommandsIndex;
+    static UINT OcclusionCulledVaseCommandsIndex;
+    static UINT OcclusionCulledMainCountIndex;
+    static UINT OcclusionCulledVaseCountIndex;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 

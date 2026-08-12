@@ -26,6 +26,7 @@ class GPUMonitor;
 class TextureManager;
 class DescriptorHeapAllocator;
 class ImGuiManager;
+class RenderTexture;
 class RenderTextureManager;
 class Sponza;
 class RendererState;
@@ -82,10 +83,16 @@ private:
 
     void FrustumPass(ID3D12GraphicsCommandList*);
     void DepthPass(ID3D12GraphicsCommandList*);
-    void OcclusionPass(ID3D12GraphicsCommandList*);
+    void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
+    void OcclusionPhase2Pass(ID3D12GraphicsCommandList*);
     void SponzaPass(ID3D12GraphicsCommandList*);
 
     void OnGUI();
+
+private:
+    void DebugDepthRenderTextures(ID3D12GraphicsCommandList*, RenderTexture*);
+    void DebugHiZRenderTextures(ID3D12GraphicsCommandList*);
+    void DebugBoundingBox(ID3D12GraphicsCommandList*);
 
 private:
     // --------------------------------------------------
@@ -105,7 +112,7 @@ private:
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_Camera;
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
-    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuilder;
+    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;

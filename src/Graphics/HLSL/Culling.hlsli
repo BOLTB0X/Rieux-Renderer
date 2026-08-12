@@ -20,9 +20,14 @@ struct ProjectedAABB
 {
     float2 uvMin;
     float2 uvMax;
-    float closestZ;
-    bool isValid;
+    float  closestZ;
+    bool  isValid;
 }; // ProjectedAABB
+
+struct PhaseInfo
+{
+    uint isPhase2; // 0: Phase 1, 1: Phase 2
+}; // PhaseInfo
 
 // AABB와 프러스텀 교차 판정 함수
 bool Check_Box_Visible(float3 aabbMin, float3 aabbMax, matrix world, float4 planes[6])

@@ -50,7 +50,7 @@ Renderer::Renderer()
     m_RenderQueue = std::make_unique<RenderQueue>();
     m_Camera = std::make_unique<Camera>();
     m_FrustumCuller = std::make_unique<FrustumCuller>();
-	m_HierarchicalZBuilder = std::make_unique<HierarchicalZBuffer>();
+	m_HierarchicalZBuffer = std::make_unique<HierarchicalZBuffer>();
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
@@ -101,7 +101,7 @@ void Renderer::Shutdown() {
 
     // LoadAssets 역순 해제
     m_OcclusionCuller.reset();
-    m_HierarchicalZBuilder.reset();
+    m_HierarchicalZBuffer.reset();
 	m_FrustumCuller.reset();
     m_Sponza.reset();
     m_TextureManager.reset();
@@ -334,7 +334,7 @@ bool Renderer::LoadAssets(HWND hwnd) {
 	hzInit.device = device;
 	hzInit.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_HIERARCHICAL_Z_SIG);
 	hzInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_HIERARCHICAL_Z_CS_SIG)->GetPSO();
-    if (!m_HierarchicalZBuilder->Init(hzInit)) {
+    if (!m_HierarchicalZBuffer->Init(hzInit)) {
         DebugHelper::DebugPrint("HierarchicalZBuffer 초기화 실패");
         return false;
     }
@@ -413,10 +413,10 @@ void Renderer::PopulateCommandList() {
     m_GPUMonitor->RecordTimestamp(cmdList, 0);
 
     FrustumPass(cmdList);
-
+    OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
-    OcclusionPass(cmdList);
-    
+    OcclusionPhase2Pass(cmdList);
+
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
     // 오프스크린 타겟(씬 렌더 타겟) 세팅
@@ -483,10 +483,30 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     PIXEndEvent(cmdList);
 } // FrustumPass
 
+void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Phase 1");
+
+    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
+
+    OcclusionCuller::DispatchPhase1Params params = {};
+    params.cmdList = cmdList;
+
+    // 현재 Hi-Z 텍스처는 아직 업데이트(Build) 전이므로 이전 프레임(N-1)의 상태를 가지고 있음
+    params.previousHizTextureDescIndex = hizTexture->GetSRVIndex();
+
+    // FrustumCuller가 1차로 걸러낸 결과물들을 입력으로 사용
+    params.frustumMainCommandsDescIndex = m_FrustumCuller->GetMainVisibleCommandsSRVIndex();
+    params.frustumVaseCommandsDescIndex = m_FrustumCuller->GetVaseVisibleCommandsSRVIndex();
+    params.frustumMainCountDescIndex = m_FrustumCuller->GetMainCounterSRVIndex();
+    params.frustumVaseCountDescIndex = m_FrustumCuller->GetVaseCounterSRVIndex();
+    params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+
+    m_OcclusionCuller->DispatchPhase1(params);
+
+    PIXEndEvent(cmdList);
+} // OcclusionPhase1Pass
+
 void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
-    // ==========================================
-    // Depth
-    // ==========================================
     PIXBeginEvent(cmdList, PIX_COLOR(0, 0, 255), L"Depth Recording Pass");
     auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
 
@@ -502,10 +522,10 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.cmdList = cmdList;
     submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
-    submitParams.mainVisibleCommandsBuffer = m_FrustumCuller->GetMainVisibleCommandsBuffer();
-    submitParams.mainCounterBuffer = m_FrustumCuller->GetMainCounterBuffer();
-    submitParams.vaseVisibleCommandsBuffer = m_FrustumCuller->GetVaseVisibleCommandsBuffer();
-    submitParams.vaseCounterBuffer = m_FrustumCuller->GetVaseCounterBuffer();
+    submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
+    submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
+    submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
+    submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
     submitParams.type = Sponza::SubmitIndirectType::Depth;
 
     m_Sponza->SubmitIndirect(submitParams);
@@ -513,10 +533,86 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 
-    // ==========================================
-    // 디버깅
-    // ==========================================
-    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
+    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
+    HierarchicalZBuffer::BuildParams hizParams;
+    hizParams.cmdList = cmdList;
+    hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
+    hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
+    m_HierarchicalZBuffer->Build(hizParams);
+    PIXEndEvent(cmdList);
+
+    DebugHiZRenderTextures(cmdList);
+} // DepthPass
+
+void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 100, 0), L"Occlusion Culling Phase 2");
+
+    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
+
+    OcclusionCuller::DispatchPhase2Params params = {};
+    params.cmdList = cmdList;
+
+    // 방금 DepthPass에서 새로 빌드된 현재 프레임의 Hi-Z 텍스처를 사용
+    params.currentHizTextureDescIndex = hizTexture->GetSRVIndex();
+    params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+
+    m_OcclusionCuller->DispatchPhase2(params);
+
+    // Phase 2까지 끝나면 최종 카운터를 CPU로 읽어오기
+    m_OcclusionCuller->ReadbackToCPU(cmdList);
+
+    PIXEndEvent(cmdList);
+} // OcclusionPhase2Pass
+
+void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
+    // 스폰자 씬 렌더링
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
+
+    Sponza::SubmitIndirectParams submitParams;
+    submitParams.cmdList = cmdList;
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
+    submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
+    submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
+    submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
+    submitParams.type = Sponza::SubmitIndirectType::General;
+
+    m_Sponza->SubmitIndirect(submitParams);
+
+    PIXEndEvent(cmdList);
+
+    DebugBoundingBox(cmdList);
+
+} // SponzaPass
+
+void Renderer::OnGUI() {
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[ HARDWARE ]");
+    ImGui::Text("CPU: %s", m_currentFrameParams.cpuName.c_str());
+    ImGui::Text("GPU: %s", m_GPUMonitor->GetName().c_str());
+    ImGui::Separator();
+
+    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ METRICS ]");
+    ImGui::Text("FPS: %d (%.2f ms)", m_currentFrameParams.fps, m_currentFrameParams.deltaTime * 1000.0f);
+    ImGui::Text("CPU Usage: %ld %%", m_currentFrameParams.cpuPercentage);
+
+    float vramUsage = m_GPUMonitor->GetVRAMUsageMB();
+    float vramTotal = m_GPUMonitor->GetVRAMTotalMB();
+    ImGui::Text("VRAM: %.1f MB / %.1f MB", vramUsage, vramTotal);
+    float progress = (vramTotal > 0.0f) ? (vramUsage / vramTotal) : 0.0f;
+    ImGui::ProgressBar(progress, ImVec2(200.0f, 0.0f));
+    ImGui::Separator();
+
+    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ GPU PROFILING ]");
+
+    double passTime = m_GPUMonitor->GetTimeMs(0, 1);
+    ImGui::Text("Pass: %.3f ms", passTime);
+    ImGui::ProgressBar(static_cast<float>(passTime / 16.6), ImVec2(200.0f, 0.0f), "");
+    ImGui::Separator();
+} // OnGUI
+
+void Renderer::DebugDepthRenderTextures(ID3D12GraphicsCommandList* cmdList, RenderTexture* depthTexture) {
+    PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
     {
         auto debugDepthTex = m_RenderTextureManager->CreateRenderTexture(
             "Depth_Debug",
@@ -535,7 +631,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
         cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
         cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
 
-        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar()};
+        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar() };
         cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
 
         cmdList->SetGraphicsRootDescriptorTable(
@@ -548,23 +644,15 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
         debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
-    PIXEndEvent(cmdList);*/
+    PIXEndEvent(cmdList);
+} // DebugRenderTextures
 
-    // ==========================================
-    // Hi-Z 텍스처 빌드 패스 실행
-    // ==========================================
-    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
+void Renderer::DebugHiZRenderTextures(ID3D12GraphicsCommandList* cmdList) {
     HierarchicalZBuffer::BuildParams hizParams;
     hizParams.cmdList = cmdList;
     hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
     hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
-    m_HierarchicalZBuilder->Build(hizParams);
-    PIXEndEvent(cmdList);
-
-    // ==========================================
-    // Hi-Z 디버깅 (Reverse-Z 선형 변환 패스)
-    // ==========================================
-    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
+    PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
     {
         auto hizTexture = hizParams.hizTexture;
 
@@ -604,51 +692,10 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
         hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
-    PIXEndEvent(cmdList);*/
-} // DepthPass
-
-void Renderer::OcclusionPass(ID3D12GraphicsCommandList* cmdList) {
-    PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Pass");
-
-    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
-
-    OcclusionCuller::DispatchParams occParams = {};
-    occParams.cmdList = cmdList;
-
-    //  Hi-Z 텍스처 SRV
-    occParams.hizTextureDescIndex = hizTexture->GetSRVIndex();
-
-    // FrustumCuller가 1차로 걸러낸 결과물들의 SRV
-    occParams.frustumMainCommandsDescIndex = m_FrustumCuller->GetMainVisibleCommandsSRVIndex();
-    occParams.frustumVaseCommandsDescIndex = m_FrustumCuller->GetVaseVisibleCommandsSRVIndex();
-    occParams.frustumMainCountDescIndex = m_FrustumCuller->GetMainCounterSRVIndex();
-    occParams.frustumVaseCountDescIndex = m_FrustumCuller->GetVaseCounterSRVIndex();
-    occParams.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
-
-    // 디스패치 실행
-    m_OcclusionCuller->Dispatch(occParams);
-    m_OcclusionCuller->ReadbackToCPU(cmdList);
-
     PIXEndEvent(cmdList);
-} // OcclusionPass
+} // DebugHiZRenderTextures
 
-void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
-    // 스폰자 씬 렌더링
-    PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
-
-    Sponza::SubmitIndirectParams submitParams;
-    submitParams.cmdList = cmdList;
-    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
-    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
-    submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
-    submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
-    submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
-    submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
-    submitParams.type = Sponza::SubmitIndirectType::General;
-    m_Sponza->SubmitIndirect(submitParams);
-
-    PIXEndEvent(cmdList);
-
+void Renderer::DebugBoundingBox(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Debug AABB Pass");
 
     Sponza::RenderDebugParams debugParams;
@@ -662,29 +709,4 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     m_Sponza->RenderDebugAABB(debugParams);
 
     PIXEndEvent(cmdList);
-} // SponzaPass
-
-void Renderer::OnGUI() {
-    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[ HARDWARE ]");
-    ImGui::Text("CPU: %s", m_currentFrameParams.cpuName.c_str());
-    ImGui::Text("GPU: %s", m_GPUMonitor->GetName().c_str());
-    ImGui::Separator();
-
-    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ METRICS ]");
-    ImGui::Text("FPS: %d (%.2f ms)", m_currentFrameParams.fps, m_currentFrameParams.deltaTime * 1000.0f);
-    ImGui::Text("CPU Usage: %ld %%", m_currentFrameParams.cpuPercentage);
-
-    float vramUsage = m_GPUMonitor->GetVRAMUsageMB();
-    float vramTotal = m_GPUMonitor->GetVRAMTotalMB();
-    ImGui::Text("VRAM: %.1f MB / %.1f MB", vramUsage, vramTotal);
-    float progress = (vramTotal > 0.0f) ? (vramUsage / vramTotal) : 0.0f;
-    ImGui::ProgressBar(progress, ImVec2(200.0f, 0.0f));
-    ImGui::Separator();
-
-    ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ GPU PROFILING ]");
-
-    double passTime = m_GPUMonitor->GetTimeMs(0, 1);
-    ImGui::Text("Pass: %.3f ms", passTime);
-    ImGui::ProgressBar(static_cast<float>(passTime / 16.6), ImVec2(200.0f, 0.0f), "");
-    ImGui::Separator();
-} // OnGUI
+} // DebugBoundingBox

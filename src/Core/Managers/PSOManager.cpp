@@ -305,36 +305,50 @@ bool PSOManager::BuildFrustumCullingCompute(const std::string& signatureKey, con
 
 bool PSOManager::BuildOcclusionCullingCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
-        b.AddCBV("OcclusionConstants", 0, D3D12_SHADER_VISIBILITY_ALL)               // b0: ViewProj, ScreenSize
-            .AddSRVTable("HiZTexture", 0, D3D12_SHADER_VISIBILITY_ALL)               // t0: Hi-Z 뎁스 텍스처
-            .AddSRVTable("FrustumMainCommands", 1, D3D12_SHADER_VISIBILITY_ALL)      // t1: 1차 통과한 Main Commands
-            .AddSRVTable("FrustumVaseCommands", 2, D3D12_SHADER_VISIBILITY_ALL)      // t2: 1차 통과한 Vase Commands
-            .AddSRVTable("FrustumMainCount", 3, D3D12_SHADER_VISIBILITY_ALL)         // t3: 1차 통과 Main 개수
-            .AddSRVTable("FrustumVaseCount", 4, D3D12_SHADER_VISIBILITY_ALL)         // t4: 1차 통과 Vase 개수
-            .AddSRVTable("MeshInstanceData", 5, D3D12_SHADER_VISIBILITY_ALL)         // t5
-            .AddUAVTable("FinalMainCommands", 0, D3D12_SHADER_VISIBILITY_ALL)        // u0: 최종 통과 Main Commands
-            .AddUAVTable("FinalVaseCommands", 1, D3D12_SHADER_VISIBILITY_ALL)        // u1: 최종 통과 Vase Commands
-            .AddUAVTable("FinalMainCount", 2, D3D12_SHADER_VISIBILITY_ALL)           // u2: 최종 통과 Main 개수 카운터
-            .AddUAVTable("FinalVaseCount", 3, D3D12_SHADER_VISIBILITY_ALL)           // u3: 최종 통과 Vase 개수 카운터
+        b.AddCBV("OcclusionConstants", 0, D3D12_SHADER_VISIBILITY_ALL)              // b0: ViewProj, ScreenSize
+            .AddConstants("PhaseIndex", 1, 1, D3D12_SHADER_VISIBILITY_ALL)          // b1: 0: Phase1, 1: Phase2
+            .AddSRVTable("HiZTexture", 0, D3D12_SHADER_VISIBILITY_ALL)              // t0: Hi-Z 뎁스 텍스처
+            .AddSRVTable("FrustumMainCommands", 1, D3D12_SHADER_VISIBILITY_ALL)     // t1: 입력 Main Commands
+            .AddSRVTable("FrustumVaseCommands", 2, D3D12_SHADER_VISIBILITY_ALL)     // t2: 입력 Vase Commands
+            .AddSRVTable("FrustumMainCount", 3, D3D12_SHADER_VISIBILITY_ALL)        // t3: 입력 Main 개수
+            .AddSRVTable("FrustumVaseCount", 4, D3D12_SHADER_VISIBILITY_ALL)        // t4: 입력 Vase 개수
+            .AddSRVTable("MeshInstanceData", 5, D3D12_SHADER_VISIBILITY_ALL)        // t5: 인스턴스 데이터
+            .AddUAVTable("FinalMainCommands", 0, D3D12_SHADER_VISIBILITY_ALL)       // u0: 최종 통과 Main Commands
+            .AddUAVTable("FinalVaseCommands", 1, D3D12_SHADER_VISIBILITY_ALL)       // u1: 최종 통과 Vase Commands
+            .AddUAVTable("FinalMainCount", 2, D3D12_SHADER_VISIBILITY_ALL)          // u2: 최종 통과 Main 개수 카운터
+            .AddUAVTable("FinalVaseCount", 3, D3D12_SHADER_VISIBILITY_ALL)          // u3: 최종 통과 Vase 개수 카운터
+
+            // Phase 1에서 실패한 녀석들을 보관할 임시 버퍼들
+            .AddUAVTable("CulledMainCommands", 4, D3D12_SHADER_VISIBILITY_ALL)      // u4: Phase1 컬링된 Main Commands
+            .AddUAVTable("CulledVaseCommands", 5, D3D12_SHADER_VISIBILITY_ALL)      // u5: Phase1 컬링된 Vase Commands
+            .AddUAVTable("CulledMainCount", 6, D3D12_SHADER_VISIBILITY_ALL)         // u6: Phase1 컬링된 Main 개수
+            .AddUAVTable("CulledVaseCount", 7, D3D12_SHADER_VISIBILITY_ALL)         // u7: Phase1 컬링된 Vase 개수
+
             .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_POINT,
                 D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-                D3D12_SHADER_VISIBILITY_ALL);                                         // s0: Hi-Z 샘플링용 Point-Clamp
+                D3D12_SHADER_VISIBILITY_ALL);                                       // s0: Hi-Z 샘플링용
         })) {
         return false;
     }
 
-    // 구조체에 인덱스 매핑
     RendererState::OcclusionConstantsIndex = GetRootParamIndex(signatureKey, "OcclusionConstants");
+    RendererState::OcclusionPhaseIndex = GetRootParamIndex(signatureKey, "PhaseIndex");
     RendererState::OcclusionHiZTextureIndex = GetRootParamIndex(signatureKey, "HiZTexture");
     RendererState::OcclusionFrustumMainCommandsIndex = GetRootParamIndex(signatureKey, "FrustumMainCommands");
     RendererState::OcclusionFrustumVaseCommandsIndex = GetRootParamIndex(signatureKey, "FrustumVaseCommands");
     RendererState::OcclusionFrustumMainCountIndex = GetRootParamIndex(signatureKey, "FrustumMainCount");
     RendererState::OcclusionFrustumVaseCountIndex = GetRootParamIndex(signatureKey, "FrustumVaseCount");
     RendererState::OcclusionMeshInstanceDataIndex = GetRootParamIndex(signatureKey, "MeshInstanceData");
+
     RendererState::OcclusionFinalMainCommandsIndex = GetRootParamIndex(signatureKey, "FinalMainCommands");
     RendererState::OcclusionFinalVaseCommandsIndex = GetRootParamIndex(signatureKey, "FinalVaseCommands");
     RendererState::OcclusionFinalMainCountIndex = GetRootParamIndex(signatureKey, "FinalMainCount");
     RendererState::OcclusionFinalVaseCountIndex = GetRootParamIndex(signatureKey, "FinalVaseCount");
+
+    RendererState::OcclusionCulledMainCommandsIndex = GetRootParamIndex(signatureKey, "CulledMainCommands");
+    RendererState::OcclusionCulledVaseCommandsIndex = GetRootParamIndex(signatureKey, "CulledVaseCommands");
+    RendererState::OcclusionCulledMainCountIndex = GetRootParamIndex(signatureKey, "CulledMainCount");
+    RendererState::OcclusionCulledVaseCountIndex = GetRootParamIndex(signatureKey, "CulledVaseCount");
 
     ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
     if (!rootSignature) {

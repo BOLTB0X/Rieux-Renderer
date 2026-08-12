@@ -36,7 +36,6 @@ void main(uint3 DTid : SV_DispatchThreadID)
     // Reverse-Z 구조이므로 가장 작은 값/ 가장 먼 깊이값이 오클루전 기준이 됨
     float minDepth = min(min(d0, d1), min(d2, d3));
 
-    // 홀수 해상도일 경우, 잘려나간 우측/하단 1픽셀 라인 추가 검사
     if ((g_HiZCB.InputResolution.x % 2 != 0) && (srcCoord.x + 2 == g_HiZCB.InputResolution.x - 1))
     {
         uint3 fetch4 = uint3(srcCoord.x + 2, fetch0.y, 0);

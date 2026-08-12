@@ -50,6 +50,12 @@ UINT  RendererState::OcclusionFinalVaseCommandsIndex = 18;
 UINT  RendererState::OcclusionFinalMainCountIndex = 19;
 UINT  RendererState::OcclusionFinalVaseCountIndex = 20;
 
+UINT RendererState::OcclusionCulledMainCommandsIndex = 21;
+UINT RendererState::OcclusionCulledVaseCommandsIndex = 22;
+UINT RendererState::OcclusionCulledMainCountIndex = 23;
+UINT RendererState::OcclusionCulledVaseCountIndex = 24;
+UINT RendererState::OcclusionPhaseIndex = 25;
+
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 
