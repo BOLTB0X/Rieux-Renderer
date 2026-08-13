@@ -41,10 +41,12 @@ public:
         UINT                       frustumMainCountDescIndex;
         UINT                       frustumVaseCountDescIndex;
         UINT                       meshInstanceDataDescIndex;
+        bool                       hasPreviousHiz;
 
         DispatchPhase1Params() : cmdList(nullptr), previousHizTextureDescIndex(0),
             frustumMainCommandsDescIndex(0), frustumVaseCommandsDescIndex(0),
-            frustumMainCountDescIndex(0), frustumVaseCountDescIndex(0), meshInstanceDataDescIndex(0) {
+            frustumMainCountDescIndex(0), frustumVaseCountDescIndex(0), meshInstanceDataDescIndex(0),
+            hasPreviousHiz(false) {
         }
     }; // DispatchPhase1Params
 
@@ -80,7 +82,7 @@ public:
 
 private:
     void BuildBuffers(ID3D12Device*);
-    void BuildGroupResources(ID3D12Device*, UINT,
+    void BuildGroupResources(ID3D12Device*, UINT, D3D12_RESOURCE_STATES,
         Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&,
         Microsoft::WRL::ComPtr<ID3D12Resource>&, UINT&);
 
@@ -106,6 +108,9 @@ private:
     UINT                                   m_phase1CulledVaseSRVIndex;        // Phase 2에서 읽기 위한 SRV
     UINT                                   m_phase1CulledVaseCounterSRVIndex;
 
+    Microsoft::WRL::ComPtr<ID3D12Resource> m_dummyUAVBuffer;
+    UINT                                   m_dummyUAVDescIndex;
+
     // Main 그룹 (최종 생존자)
     Microsoft::WRL::ComPtr<ID3D12Resource> m_finalMainCommandsBuffer;
     Microsoft::WRL::ComPtr<ID3D12Resource> m_finalMainCounterBuffer;
@@ -126,5 +131,6 @@ private:
     UINT                                   m_maxVaseCount;
     UINT                                   m_cachedMainVisibleCount;
     UINT                                   m_cachedVaseVisibleCount;
+
     DescriptorHeapAllocator*               m_heapAllocator;
 }; // OcclusionCuller

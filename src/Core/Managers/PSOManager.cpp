@@ -306,7 +306,7 @@ bool PSOManager::BuildFrustumCullingCompute(const std::string& signatureKey, con
 bool PSOManager::BuildOcclusionCullingCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {
         b.AddCBV("OcclusionConstants", 0, D3D12_SHADER_VISIBILITY_ALL)              // b0: ViewProj, ScreenSize
-            .AddConstants("PhaseIndex", 1, 1, D3D12_SHADER_VISIBILITY_ALL)          // b1: 0: Phase1, 1: Phase2
+            .AddConstants("PhaseIndex", 1, 2, D3D12_SHADER_VISIBILITY_ALL)          // b1: Phase, Previous Hi-Z Valid
             .AddSRVTable("HiZTexture", 0, D3D12_SHADER_VISIBILITY_ALL)              // t0: Hi-Z 뎁스 텍스처
             .AddSRVTable("FrustumMainCommands", 1, D3D12_SHADER_VISIBILITY_ALL)     // t1: 입력 Main Commands
             .AddSRVTable("FrustumVaseCommands", 2, D3D12_SHADER_VISIBILITY_ALL)     // t2: 입력 Vase Commands

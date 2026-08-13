@@ -98,7 +98,6 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
 
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-
     ID3D12PipelineState* mainPSO;
     ID3D12PipelineState* sidePSO;
     if (params.type == SubmitIndirectType::General) {

@@ -413,6 +413,7 @@ void Renderer::PopulateCommandList() {
     m_GPUMonitor->RecordTimestamp(cmdList, 0);
 
     FrustumPass(cmdList);
+ 
     OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
     OcclusionPhase2Pass(cmdList);
@@ -487,11 +488,13 @@ void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Phase 1");
 
     auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
+    hizTexture->Transition(cmdList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
     OcclusionCuller::DispatchPhase1Params params = {};
     params.cmdList = cmdList;
+    params.hasPreviousHiz = m_HierarchicalZBuffer->IshasValidHiz();
 
-    // 현재 Hi-Z 텍스처는 아직 업데이트(Build) 전이므로 이전 프레임(N-1)의 상태를 가지고 있음
+    // 현재 Hi-Z 텍스처는 아직 업데이트 전이므로 이전 프레임(N-1)의 상태를 가지고 있음
     params.previousHizTextureDescIndex = hizTexture->GetSRVIndex();
 
     // FrustumCuller가 1차로 걸러낸 결과물들을 입력으로 사용
@@ -502,7 +505,6 @@ void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
     params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
 
     m_OcclusionCuller->DispatchPhase1(params);
-
     PIXEndEvent(cmdList);
 } // OcclusionPhase1Pass
 
@@ -530,7 +532,6 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 
     m_Sponza->SubmitIndirect(submitParams);
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
     PIXEndEvent(cmdList);
 
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
@@ -552,13 +553,16 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     OcclusionCuller::DispatchPhase2Params params = {};
     params.cmdList = cmdList;
 
-    // 방금 DepthPass에서 새로 빌드된 현재 프레임의 Hi-Z 텍스처를 사용
     params.currentHizTextureDescIndex = hizTexture->GetSRVIndex();
     params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
 
-    m_OcclusionCuller->DispatchPhase2(params);
+    if (m_HierarchicalZBuffer->IshasValidHiz())
+    {
+        m_OcclusionCuller->DispatchPhase2(params);
+    }
 
-    // Phase 2까지 끝나면 최종 카운터를 CPU로 읽어오기
+    m_HierarchicalZBuffer->OnHiZ();
+
     m_OcclusionCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);

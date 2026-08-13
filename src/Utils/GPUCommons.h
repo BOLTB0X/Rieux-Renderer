@@ -98,10 +98,12 @@ namespace GPUCommons {
         DirectX::XMMATRIX viewProj;
         float             screenWidth;
         float             screenHeight;
+        uint32_t          mainCapacity;
+        uint32_t          vaseCapacity;
         DirectX::XMFLOAT2 padding;
 
         OcclusionCullingCB() : viewProj(DirectX::XMMatrixIdentity())
-            , screenWidth(0.0f), screenHeight(0.0f), padding(0.0f, 0.0f) {
+            , screenWidth(0.0f), screenHeight(0.0f), mainCapacity(0), vaseCapacity(0), padding(0.0f, 0.0f) {
         }
     }; // OcclusionCullingCB
 } // struct

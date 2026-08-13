@@ -13,6 +13,8 @@ struct OcclusionCB
 {
     matrix viewProjection;
     float2 screenSize;
+    uint   mainCapacity;
+    uint   vaseCapacity;
     float2 oPadding;
 }; // OcclusionCB
 
@@ -26,7 +28,8 @@ struct ProjectedAABB
 
 struct PhaseInfo
 {
-    uint isPhase2; // 0: Phase 1, 1: Phase 2
+    uint isPhase2;
+    uint hasPreviousHiz;
 }; // PhaseInfo
 
 // AABB와 프러스텀 교차 판정 함수
@@ -91,7 +94,7 @@ float3 Get_BoxCorner(float3 aabbMin, float3 aabbMax, uint index)
 // AABB 투영 및 NDC 바운딩 박스 계산 함수
 ProjectedAABB Get_ProjectedAABB(float3 aabbMin, float3 aabbMax, matrix MVP)
 {
-    ProjectedAABB result;
+    ProjectedAABB result = (ProjectedAABB)0;
     float minX = 1.0f, minY = 1.0f;
     float maxX = -1.0f, maxY = -1.0f;
     result.closestZ = -1.0f;
@@ -106,15 +109,20 @@ ProjectedAABB Get_ProjectedAABB(float3 aabbMin, float3 aabbMax, matrix MVP)
             clipPos.w = 0.0001f;
         
         float3 ndc = clipPos.xyz / clipPos.w;
+        
+        if (any(isnan(ndc)) || any(isinf(ndc)))
+        {
+            return result;
+        }
 
         minX = min(minX, ndc.x);
         minY = min(minY, ndc.y);
         maxX = max(maxX, ndc.x);
         maxY = max(maxY, ndc.y);
         
-        result.closestZ = max(result.closestZ, ndc.z); // Reverse-Z
+        result.closestZ = max(result.closestZ, ndc.z);
     }
-
+    
     // 화면 밖으로 완전히 벗어났는지 체크
     if (minX > 1.0f || maxX < -1.0f || minY > 1.0f || maxY < -1.0f)
     {
@@ -132,14 +140,16 @@ ProjectedAABB Get_ProjectedAABB(float3 aabbMin, float3 aabbMax, matrix MVP)
 bool Is_Occluded(ProjectedAABB projAABB, float2 screenSize, Texture2D<float> hiZTex, SamplerState pointSampler)
 {
     float2 sizeInPixels = (projAABB.uvMax - projAABB.uvMin) * screenSize;
-    float mipLevel = ceil(log2(max(max(sizeInPixels.x, sizeInPixels.y), 1.0f)));
+    float objectMipLevel = ceil(log2(max(max(sizeInPixels.x, sizeInPixels.y), 1.0f)));
+    float maxMipLevel = floor(log2(max(max(screenSize.x, screenSize.y), 1.0f)));
+    float mipLevel = min(objectMipLevel, maxMipLevel);
 
     float d0 = hiZTex.SampleLevel(pointSampler, float2(projAABB.uvMin.x, projAABB.uvMin.y), mipLevel).r;
     float d1 = hiZTex.SampleLevel(pointSampler, float2(projAABB.uvMax.x, projAABB.uvMin.y), mipLevel).r;
     float d2 = hiZTex.SampleLevel(pointSampler, float2(projAABB.uvMin.x, projAABB.uvMax.y), mipLevel).r;
     float d3 = hiZTex.SampleLevel(pointSampler, float2(projAABB.uvMax.x, projAABB.uvMax.y), mipLevel).r;
 
-    float maxOccluderDepth = min(min(d0, d1), min(d2, d3)); // Reverse-Z 기준
+    float maxOccluderDepth = min(min(d0, d1), min(d2, d3));
 
     // 내 물체가 가림막보다 뒤에 있다면 true 반환
     return (projAABB.closestZ < maxOccluderDepth);

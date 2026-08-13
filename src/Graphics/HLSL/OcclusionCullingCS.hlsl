@@ -25,8 +25,8 @@ SamplerState                        g_PointClampSampler : register(s0);
 [numthreads(64, 1, 1)]
 void main(uint3 DTid : SV_DispatchThreadID)
 {
-    uint mainCount = g_FrustumMainCount.Load(0);
-    uint vaseCount = g_FrustumVaseCount.Load(0);
+    uint mainCount = min(g_FrustumMainCount.Load(0), g_OcclusionCB.mainCapacity);
+    uint vaseCount = min(g_FrustumVaseCount.Load(0), g_OcclusionCB.vaseCapacity);
     uint totalCount = mainCount + vaseCount;
 
     if (DTid.x >= totalCount)
@@ -50,8 +50,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
     matrix MVP = mul(instance.worldMatrix, g_OcclusionCB.viewProjection);
     ProjectedAABB projAABB = Get_ProjectedAABB(instance.aabbMin, instance.aabbMax, MVP);
 
-    // 컬링 테스트 결과 판정
-    bool isVisible = projAABB.isValid && !Is_Occluded(projAABB, g_OcclusionCB.screenSize, g_HiZTexture, g_PointClampSampler);
+    bool isVisible;
+    if (g_PhaseCB.hasPreviousHiz == 0)
+    {
+        isVisible = true;
+    }
+    else
+    {
+        isVisible = projAABB.isValid && !Is_Occluded(projAABB, g_OcclusionCB.screenSize, g_HiZTexture, g_PointClampSampler);
+    }
 
     if (isVisible)
     {
@@ -61,28 +68,33 @@ void main(uint3 DTid : SV_DispatchThreadID)
         if (isMain)
         {
             g_FinalMainCount.InterlockedAdd(0, 1, outputIndex);
-            g_FinalMainCommands[outputIndex] = cmd;
+            if (outputIndex < g_OcclusionCB.mainCapacity)
+                g_FinalMainCommands[outputIndex] = cmd;
         }
         else
         {
             g_FinalVaseCount.InterlockedAdd(0, 1, outputIndex);
-            g_FinalVaseCommands[outputIndex] = cmd;
+            if (outputIndex < g_OcclusionCB.vaseCapacity)
+                g_FinalVaseCommands[outputIndex] = cmd;
         }
     } // if (isVisible)
     else if (g_PhaseCB.isPhase2 == 0)
     {
-        // 테스트 실패 & 현재 Phase 1일 때만: 다음 Phase 2를 위해 Culled 버퍼에 기록
+        // 테스트 실패 & 현재 Phase 1일 때만
+        // 다음 Phase 2를 위해 Culled 버퍼에 기록
         // 만약 Phase 2에서도 실패했다면 더 이상 볼일 없으므로 그냥 Drop
         uint outputIndex;
         if (isMain)
         {
             g_CulledMainCount.InterlockedAdd(0, 1, outputIndex);
-            g_CulledMainCommands[outputIndex] = cmd;
+            if (outputIndex < g_OcclusionCB.mainCapacity)
+                g_CulledMainCommands[outputIndex] = cmd;
         }
         else
         {
             g_CulledVaseCount.InterlockedAdd(0, 1, outputIndex);
-            g_CulledVaseCommands[outputIndex] = cmd;
+            if (outputIndex < g_OcclusionCB.vaseCapacity)
+                g_CulledVaseCommands[outputIndex] = cmd;
         }
     } // else if (g_PhaseCB.isPhase2 == 0)
 } // main

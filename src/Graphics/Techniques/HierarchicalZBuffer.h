@@ -36,10 +36,13 @@ public:
 
     bool Init(const InitParams&);
     void Build(const BuildParams&);
+    void OnHiZ();
+    bool IshasValidHiz();
 
 private:
 
     ID3D12Device*        m_device;
     ID3D12RootSignature* m_rootSignature;
     ID3D12PipelineState* m_pso;
+    bool                 m_hasValidHiz;
 }; // HierarchicalZBuffer
