@@ -145,6 +145,8 @@ bool System::Frame() {
         m_Input->SetCursorHidden(!uiVisible);
     }
 
+    const bool toggleCameraMode = m_Input->IsF2Toggled();
+
     m_FPS->Frame();
     m_CPU->Frame();
     m_Timer->Frame();
@@ -155,6 +157,7 @@ bool System::Frame() {
     frameParams.playTime = m_Timer->GetTotalTime();
     frameParams.cpuPercentage = m_CPU->GetCPUPercentage();
     frameParams.cpuName = m_CPU->GetName();
+    frameParams.toggleCameraMode = toggleCameraMode;
 
     if (!m_Input->IsCursorHidden()) {
         if (!ImGui::GetIO().WantCaptureMouse) {
@@ -163,6 +166,12 @@ bool System::Frame() {
                 auto rotDelta = m_Input->GetAdjustedMouseDelta();
                 frameParams.rotationDeltaX = rotDelta.x;
                 frameParams.rotationDeltaY = rotDelta.y;
+            }
+
+            if (m_Input->IsRightMouseDown()) {
+                auto sceneRotDelta = m_Input->GetAdjustedMouseDelta();
+                frameParams.sceneRotationDeltaX = sceneRotDelta.x;
+                frameParams.sceneRotationDeltaY = sceneRotDelta.y;
             }
 
             int wheelDelta = m_Input->GetMouseWheelDelta();
@@ -190,6 +199,25 @@ bool System::Frame() {
     }
     if (m_Input->IsXPressed()) {
         frameParams.moveUp -= speed;
+    }
+
+    if (m_Input->IsUpPressed()) {
+        frameParams.masterMoveForward += speed;
+    }
+    if (m_Input->IsDownPressed()) {
+        frameParams.masterMoveForward -= speed;
+    }
+    if (m_Input->IsLeftPressed()) {
+        frameParams.masterMoveRight -= speed;
+    }
+    if (m_Input->IsRightPressed()) {
+        frameParams.masterMoveRight += speed;
+    }
+    if (m_Input->IsCPressed()) {
+        frameParams.masterMoveUp += speed;
+    }
+    if (m_Input->IsVPressed()) {
+        frameParams.masterMoveUp -= speed;
     }
 
     if (!m_Input->Frame()) {

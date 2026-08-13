@@ -39,7 +39,12 @@ struct MeshInstanceData
     float  mPadding2;
 
     float  isVase;
-    float3  mPadding3;
+    uint   metallicIndex;
+    uint   roughnessIndex;
+    float  metallicFactor;
+    float  roughnessFactor;
+    float3 mPadding3;
+    float4 albedoFactor;
 }; // MeshInstanceData
 
 struct InstanceCB

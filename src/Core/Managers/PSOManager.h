@@ -44,10 +44,12 @@ private:
     bool BuildOcclusionCullingCompute(const std::string&, const std::wstring&);
 
     bool BuildDepthRecord(const std::string&);
+	bool BuildShadowRecord(const std::string&);
 	bool BuildHierarchicalZ(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);
+    bool BuildDebugLine(const std::string&);
 
     bool BuildSolidCullBack(const std::string&, D3D12PipelineState::DefaultInitParams);
     bool BuildSolidCullNone(const std::string&, D3D12PipelineState::DefaultInitParams);

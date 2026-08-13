@@ -8,7 +8,7 @@ Input::Input()
     : m_mouseX(0), m_mouseY(0), m_prevMouseX(0), m_prevMouseY(0),
     m_mouseDeltaX(0), m_mouseDeltaY(0), m_mouseWheelDelta(0),
     m_windowCenterX(0), m_windowCenterY(0),
-    m_F1_released(true), m_prevMouseL(false),
+    m_F1_released(true), m_F2_released(true), m_prevMouseL(false),
     m_sensitivity(0.05f), m_adjMouseX(0.0f), m_adjMouseY(0.0f),
     m_cursorHidden(false) {
 
@@ -134,8 +134,14 @@ bool Input::IsSPressed() { return m_keys['S']; }
 bool Input::IsDPressed() { return m_keys['D']; }
 bool Input::IsZPressed() { return m_keys['Z']; }
 bool Input::IsXPressed() { return m_keys['X']; }
+bool Input::IsCPressed() { return m_keys['C']; }
+bool Input::IsVPressed() { return m_keys['V']; }
 bool Input::IsPgUpPressed() { return m_keys[VK_PRIOR]; } // PageUp
 bool Input::IsPgDownPressed() { return m_keys[VK_NEXT]; }  // PageDown
+bool Input::IsUpPressed() { return m_keys[VK_UP]; }
+bool Input::IsDownPressed() { return m_keys[VK_DOWN]; }
+bool Input::IsLeftPressed() { return m_keys[VK_LEFT]; }
+bool Input::IsRightPressed() { return m_keys[VK_RIGHT]; }
 
 bool Input::IsF1Toggled() {
     if (m_keys[VK_F1]) {
@@ -149,3 +155,16 @@ bool Input::IsF1Toggled() {
     }
     return false;
 } // IsF1Toggled
+
+bool Input::IsF2Toggled() {
+    if (m_keys[VK_F2]) {
+        if (m_F2_released) {
+            m_F2_released = false;
+            return true;
+        }
+    }
+    else {
+        m_F2_released = true;
+    }
+    return false;
+} // IsF2Toggled

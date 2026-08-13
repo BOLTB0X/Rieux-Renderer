@@ -39,7 +39,8 @@ using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
 Renderer::Renderer()
-    : m_currentFrameParams{} {
+    : m_currentFrameParams{}, m_useMasterCamera(false), m_sceneCameraFrustumVBV{},
+    m_sceneCameraFrustumMappedData(nullptr) {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
@@ -48,7 +49,8 @@ Renderer::Renderer()
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
-    m_Camera = std::make_unique<Camera>();
+    m_SceneCamera = std::make_unique<Camera>();
+    m_MasterCamera = std::make_unique<Camera>();
     m_FrustumCuller = std::make_unique<FrustumCuller>();
 	m_HierarchicalZBuffer = std::make_unique<HierarchicalZBuffer>();
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
@@ -95,11 +97,10 @@ void Renderer::Shutdown() {
         m_CommandQueue->WaitForPreviousFrame();
     }
 
-    // LoadGUIs 역순 해제
-    // (UI 리소스 및 렌더 타겟 참조 해제)
+    // UI 리소스 및 렌더 타겟 참조 해제
     m_ImGuiManager.reset();
 
-    // LoadAssets 역순 해제
+    // LoadAssets 해제
     m_OcclusionCuller.reset();
     m_HierarchicalZBuffer.reset();
 	m_FrustumCuller.reset();
@@ -107,11 +108,17 @@ void Renderer::Shutdown() {
     m_TextureManager.reset();
     m_PSOManager.reset();
 
-    // LoadSceneRenderTarget 역순 해제
+    // LoadSceneRenderTarget 해제
     m_SceneRenderTarget.reset();
     m_RenderTextureManager.reset();
 
-    // LoadPipeline 역순 해제
+    if (m_sceneCameraFrustumBuffer) {
+        m_sceneCameraFrustumBuffer->Unmap(0, nullptr);
+        m_sceneCameraFrustumBuffer.Reset();
+    }
+    m_sceneCameraFrustumMappedData = nullptr;
+
+    // LoadPipeline  해제
     m_GPUMonitor.reset();
 
     // 상수 버퍼 해제
@@ -128,39 +135,97 @@ void Renderer::Shutdown() {
     // 기타 컴포넌트 해제
     m_RenderQueue.reset();
     m_DirectionalLight.reset();
-    m_Camera.reset();
+    m_MasterCamera.reset();
+    m_SceneCamera.reset();
     // 디바이스 최종 해제
     m_D3D12Device.reset();
 } // Shutdown
 
 bool Renderer::Frame(const FrameParams& frameParams) {
     m_currentFrameParams = frameParams;
+    bool enteredMasterCamera = false;
 
-    m_Camera->Frame(frameParams.moveForward, frameParams.moveRight, frameParams.moveUp,
-        frameParams.rotationDeltaX, frameParams.rotationDeltaY, frameParams.zoomDelta);
-    m_FrustumCuller->Frame(m_Camera->GetViewMatrix(), m_Camera->GetStandardZProjectionMatrix());
+    if (frameParams.toggleCameraMode) {
+        m_useMasterCamera = !m_useMasterCamera;
+
+        if (m_useMasterCamera) {
+            enteredMasterCamera = true;
+            m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
+            m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
+            m_MasterCamera->SetFov(m_SceneCamera->GetFov());
+            m_MasterCamera->SetAspect(m_SceneCamera->GetAspect());
+            m_MasterCamera->SetNear(m_SceneCamera->GetNear());
+            m_MasterCamera->SetFar(m_SceneCamera->GetFar());
+            m_MasterCamera->Update();
+        }
+    }
+
+    if (m_useMasterCamera) {
+        if (!enteredMasterCamera) {
+            m_MasterCamera->Frame(
+                frameParams.masterMoveForward,
+                frameParams.masterMoveRight,
+                frameParams.masterMoveUp,
+                frameParams.rotationDeltaX,
+                frameParams.rotationDeltaY,
+                frameParams.zoomDelta);
+
+            m_SceneCamera->Frame(
+                frameParams.moveForward,
+                frameParams.moveRight,
+                frameParams.moveUp,
+                frameParams.sceneRotationDeltaX,
+                frameParams.sceneRotationDeltaY,
+                0.0f);
+        }
+    }
+    else {
+        m_SceneCamera->Frame(
+            frameParams.moveForward,
+            frameParams.moveRight,
+            frameParams.moveUp,
+            frameParams.rotationDeltaX,
+            frameParams.rotationDeltaY,
+            frameParams.zoomDelta);
+    }
+
+    m_FrustumCuller->Frame(m_SceneCamera->GetViewMatrix(), m_SceneCamera->GetStandardZProjectionMatrix());
     m_DirectionalLight->Frame();
     m_GPUMonitor->Frame();
 
     OcclusionCuller::FrameParams occParams;
-    occParams.viewMatrix = m_Camera->GetViewMatrix();
-    occParams.projectionMatrix = m_Camera->GetReverseZProjectionMatrix();
+    occParams.viewMatrix = m_SceneCamera->GetViewMatrix();
+    occParams.projectionMatrix = m_SceneCamera->GetReverseZProjectionMatrix();
     occParams.screenWidth = static_cast<float>(RendererState::ScreenWidth);
     occParams.screenHeight = static_cast<float>(RendererState::ScreenHeight);
     m_OcclusionCuller->Frame(occParams);
 
+    Camera* renderCamera = GetActiveCamera();
     RendererState::FrameParams stateParams;
-    stateParams.view = m_Camera->GetViewMatrix();
-    stateParams.projection = m_Camera->GetReverseZProjectionMatrix();
-    stateParams.cameraPosition = m_Camera->GetPosition();
-    stateParams.cameraFov = m_Camera->GetFov();
+    stateParams.view = renderCamera->GetViewMatrix();
+    stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
+    stateParams.cameraPosition = renderCamera->GetPosition();
+    stateParams.cameraFov = renderCamera->GetFov();
     stateParams.direction = m_DirectionalLight->GetDirection();
     stateParams.ambient = m_DirectionalLight->GetAmbient();
     stateParams.diffuse = m_DirectionalLight->GetDiffuse();
     stateParams.lookAt = m_DirectionalLight->GetLookAt();
     stateParams.lightViewMatrix = m_DirectionalLight->GetViewMatrix();
     stateParams.lightProjectionMatrix = m_DirectionalLight->GetProjection();
+    stateParams.shadowMapWidth = SharedCommons::SHADOWMAP_WIDTH;
+    stateParams.shadowMapHeight = SharedCommons::SHADOWMAP_HEIGHT;
+    stateParams.shadowBias = SharedCommons::SHADOW_BIAS;
+    stateParams.shadowSpread = SharedCommons::SHADOW_SPREAD;
     m_RendererState->Frame(stateParams);
+
+    RendererState::FrameParams sceneFrameParams = stateParams;
+    sceneFrameParams.view = m_SceneCamera->GetViewMatrix();
+    sceneFrameParams.projection = m_SceneCamera->GetReverseZProjectionMatrix();
+    sceneFrameParams.cameraPosition = m_SceneCamera->GetPosition();
+    sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
+    m_RendererState->FrameScene(sceneFrameParams);
+
+    UpdateSceneCameraFrustum();
     
     return Render();
 } // Frame
@@ -261,8 +326,18 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
         return false;
     }
 
-    m_Camera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
+    m_SceneCamera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
         SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+    m_MasterCamera->Init(SharedCommons::DEFAULT_FOV,
+        (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
+        SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+    m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
+    m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
+    m_MasterCamera->SetFov(m_SceneCamera->GetFov());
+    m_MasterCamera->SetAspect(m_SceneCamera->GetAspect());
+    m_MasterCamera->SetNear(m_SceneCamera->GetNear());
+    m_MasterCamera->SetFar(m_SceneCamera->GetFar());
+    m_MasterCamera->Update();
     m_DirectionalLight->Init();
 
     if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
@@ -312,9 +387,16 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.psoDepthSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoDepthAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoShadowSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoShadowAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
+        return false;
+    }
+
+    if (!BuildSceneCameraFrustumBuffer()) {
+        DebugHelper::DebugPrint("씬 카메라 절두체 버퍼 생성 실패");
         return false;
     }
 
@@ -376,8 +458,13 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     ));
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Camera GUI",
-        [this]() { m_Camera->OnGUI(); }
+        "Scene Camera GUI",
+        [this]() { m_SceneCamera->OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Master Camera GUI",
+        [this]() { m_MasterCamera->OnGUI(); }
     ));
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
@@ -390,15 +477,15 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     //    [this]() { m_FrustumCuller->OnGUI(); }
     //));
 
-    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Occlusion Culling GUI",
-        [this]() { m_OcclusionCuller->OnGUI(); }
-    ));
+    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+    //    "Occlusion Culling GUI",
+    //    [this]() { m_OcclusionCuller->OnGUI(); }
+    //));
 
-    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Render Textures GUI",
-        [this]() { m_RenderTextureManager->OnGUI(); }
-    ));
+    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+    //    "Render Textures GUI",
+    //    [this]() { m_RenderTextureManager->OnGUI(); }
+    //));
 
     return true;
 } // UpdateGUIs
@@ -416,6 +503,7 @@ void Renderer::PopulateCommandList() {
  
     OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
+    ShadowPass(cmdList);
     OcclusionPhase2Pass(cmdList);
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
@@ -427,6 +515,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
+    DebugSceneCameraFrustum(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
@@ -493,11 +582,7 @@ void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
     OcclusionCuller::DispatchPhase1Params params = {};
     params.cmdList = cmdList;
     params.hasPreviousHiz = m_HierarchicalZBuffer->IshasValidHiz();
-
-    // 현재 Hi-Z 텍스처는 아직 업데이트 전이므로 이전 프레임(N-1)의 상태를 가지고 있음
     params.previousHizTextureDescIndex = hizTexture->GetSRVIndex();
-
-    // FrustumCuller가 1차로 걸러낸 결과물들을 입력으로 사용
     params.frustumMainCommandsDescIndex = m_FrustumCuller->GetMainVisibleCommandsSRVIndex();
     params.frustumVaseCommandsDescIndex = m_FrustumCuller->GetVaseVisibleCommandsSRVIndex();
     params.frustumMainCountDescIndex = m_FrustumCuller->GetMainCounterSRVIndex();
@@ -522,8 +607,9 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
-    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetSceneFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.shadowMapDescriptorIndex = UINT_MAX;
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
@@ -542,8 +628,54 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     m_HierarchicalZBuffer->Build(hizParams);
     PIXEndEvent(cmdList);
 
-    DebugHiZRenderTextures(cmdList);
+    //DebugHiZRenderTextures(cmdList);
 } // DepthPass
+
+void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"Shadow Map Pass");
+
+    auto shadowTexture = m_RenderTextureManager->GetRenderTexture(
+        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+    if (!shadowTexture) {
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    shadowTexture->ClearDepth(cmdList, 1.0f, 0);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = shadowTexture->GetDSVHandle();
+    cmdList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
+
+    D3D12_VIEWPORT viewport = {};
+    viewport.Width = static_cast<float>(shadowTexture->GetWidth());
+    viewport.Height = static_cast<float>(shadowTexture->GetHeight());
+    viewport.MaxDepth = 1.0f;
+    D3D12_RECT scissor = {
+        0,
+        0,
+        static_cast<LONG>(shadowTexture->GetWidth()),
+        static_cast<LONG>(shadowTexture->GetHeight())
+    };
+    cmdList->RSSetViewports(1, &viewport);
+    cmdList->RSSetScissorRects(1, &scissor);
+
+    Sponza::SubmitIndirectParams submitParams;
+    submitParams.cmdList = cmdList;
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.shadowMapDescriptorIndex = shadowTexture->GetSRVIndex();
+    submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
+    submitParams.mainCounterBuffer = nullptr;
+    submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
+    submitParams.vaseCounterBuffer = nullptr;
+    submitParams.type = Sponza::SubmitIndirectType::Shadow;
+
+    m_Sponza->SubmitIndirect(submitParams);
+    shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    PIXEndEvent(cmdList);
+} // ShadowPass
 
 void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(255, 100, 0), L"Occlusion Culling Phase 2");
@@ -562,8 +694,7 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     }
 
     m_HierarchicalZBuffer->OnHiZ();
-
-    m_OcclusionCuller->ReadbackToCPU(cmdList);
+    //m_OcclusionCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
 } // OcclusionPhase2Pass
@@ -576,6 +707,8 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.cmdList = cmdList;
     submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.shadowMapDescriptorIndex = m_RenderTextureManager->GetRenderTexture(
+        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE)->GetSRVIndex();
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
@@ -586,11 +719,18 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 
-    DebugBoundingBox(cmdList);
+    //DebugBoundingBox(cmdList);
 
 } // SponzaPass
 
 void Renderer::OnGUI() {
+    ImGui::Text("Camera Mode: %s", m_useMasterCamera ? "Master View" : "Scene View");
+    ImGui::Text("F2: Toggle Scene/Master View");
+    ImGui::Text("Scene View: WASD/Z/X + LMB");
+    ImGui::Text("Master View: Arrow/C/V + LMB");
+    ImGui::Text("Master View Scene Camera: WASD/Z/X + RMB");
+    ImGui::Separator();
+
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[ HARDWARE ]");
     ImGui::Text("CPU: %s", m_currentFrameParams.cpuName.c_str());
     ImGui::Text("GPU: %s", m_GPUMonitor->GetName().c_str());
@@ -635,7 +775,8 @@ void Renderer::DebugDepthRenderTextures(ID3D12GraphicsCommandList* cmdList, Rend
         cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
         cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
 
-        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar() };
+        const Camera* activeCamera = GetActiveCamera();
+        struct { float nearPlane; float farPlane; } cameraClip = { activeCamera->GetNear(), activeCamera->GetFar() };
         cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
 
         cmdList->SetGraphicsRootDescriptorTable(
@@ -683,7 +824,8 @@ void Renderer::DebugHiZRenderTextures(ID3D12GraphicsCommandList* cmdList) {
         cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
         cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
 
-        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar() };
+        const Camera* activeCamera = GetActiveCamera();
+        struct { float nearPlane; float farPlane; } cameraClip = { activeCamera->GetNear(), activeCamera->GetFar() };
         cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
 
         cmdList->SetGraphicsRootDescriptorTable(
@@ -714,3 +856,115 @@ void Renderer::DebugBoundingBox(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 } // DebugBoundingBox
+
+Camera* Renderer::GetActiveCamera() {
+    return m_useMasterCamera ? m_MasterCamera.get() : m_SceneCamera.get();
+} // GetActiveCamera
+
+const Camera* Renderer::GetActiveCamera() const {
+    return m_useMasterCamera ? m_MasterCamera.get() : m_SceneCamera.get();
+} // GetActiveCamera
+
+bool Renderer::BuildSceneCameraFrustumBuffer() {
+    if (!m_D3D12Device || !m_D3D12Device->GetDevice()) {
+        return false;
+    }
+
+    const UINT vertexCount = 24;
+    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
+    CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(
+        sizeof(DebugLineVertex) * vertexCount);
+
+    if (FAILED(m_D3D12Device->GetDevice()->CreateCommittedResource(
+        &uploadHeap,
+        D3D12_HEAP_FLAG_NONE,
+        &bufferDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ,
+        nullptr,
+        IID_PPV_ARGS(&m_sceneCameraFrustumBuffer)))) {
+        return false;
+    }
+
+    if (FAILED(m_sceneCameraFrustumBuffer->Map(
+        0,
+        nullptr,
+        reinterpret_cast<void**>(&m_sceneCameraFrustumMappedData)))) {
+        m_sceneCameraFrustumBuffer.Reset();
+        return false;
+    }
+
+    m_sceneCameraFrustumVBV.BufferLocation = m_sceneCameraFrustumBuffer->GetGPUVirtualAddress();
+    m_sceneCameraFrustumVBV.SizeInBytes = sizeof(DebugLineVertex) * vertexCount;
+    m_sceneCameraFrustumVBV.StrideInBytes = sizeof(DebugLineVertex);
+    UpdateSceneCameraFrustum();
+    return true;
+} // BuildSceneCameraFrustumBuffer
+
+void Renderer::UpdateSceneCameraFrustum() {
+    if (!m_sceneCameraFrustumMappedData || !m_SceneCamera) {
+        return;
+    }
+
+    const XMMATRIX viewProjection = m_SceneCamera->GetViewMatrix()
+        * m_SceneCamera->GetStandardZProjectionMatrix();
+    const XMMATRIX inverseViewProjection = XMMatrixInverse(nullptr, viewProjection);
+
+    const XMFLOAT3 ndcCorners[8] = {
+        { -1.0f, -1.0f, 0.0f }, { 1.0f, -1.0f, 0.0f },
+        { 1.0f, 1.0f, 0.0f }, { -1.0f, 1.0f, 0.0f },
+        { -1.0f, -1.0f, 1.0f }, { 1.0f, -1.0f, 1.0f },
+        { 1.0f, 1.0f, 1.0f }, { -1.0f, 1.0f, 1.0f }
+    };
+
+    XMFLOAT3 worldCorners[8] = {};
+    for (int i = 0; i < 8; ++i) {
+        const XMVECTOR ndc = XMLoadFloat3(&ndcCorners[i]);
+        XMStoreFloat3(&worldCorners[i], XMVector3TransformCoord(ndc, inverseViewProjection));
+    }
+
+    const XMFLOAT3 nearColor = { 1.0f, 0.2f, 0.1f };
+    const XMFLOAT3 farColor = { 1.0f, 0.8f, 0.1f };
+
+    auto writeLine = [this](UINT index, const XMFLOAT3& a, const XMFLOAT3& b, const XMFLOAT3& color) {
+        m_sceneCameraFrustumMappedData[index * 2] = { a, color };
+        m_sceneCameraFrustumMappedData[index * 2 + 1] = { b, color };
+    };
+
+    writeLine(0, worldCorners[0], worldCorners[1], nearColor);
+    writeLine(1, worldCorners[1], worldCorners[2], nearColor);
+    writeLine(2, worldCorners[2], worldCorners[3], nearColor);
+    writeLine(3, worldCorners[3], worldCorners[0], nearColor);
+    writeLine(4, worldCorners[4], worldCorners[5], farColor);
+    writeLine(5, worldCorners[5], worldCorners[6], farColor);
+    writeLine(6, worldCorners[6], worldCorners[7], farColor);
+    writeLine(7, worldCorners[7], worldCorners[4], farColor);
+    writeLine(8, worldCorners[0], worldCorners[4], nearColor);
+    writeLine(9, worldCorners[1], worldCorners[5], nearColor);
+    writeLine(10, worldCorners[2], worldCorners[6], nearColor);
+    writeLine(11, worldCorners[3], worldCorners[7], nearColor);
+} // UpdateSceneCameraFrustum
+
+void Renderer::DebugSceneCameraFrustum(ID3D12GraphicsCommandList* cmdList) {
+    if (!m_useMasterCamera || !m_sceneCameraFrustumBuffer || !m_PSOManager) {
+        return;
+    }
+
+    ID3D12RootSignature* rootSignature = m_PSOManager->GetID3D12RootSignature(
+        SharedCommons::KEY_DEBUG_LINE_SIG);
+    D3D12PipelineState* pipelineState = m_PSOManager->GetPSO(
+        SharedCommons::KEY_DEBUG_LINE_PSO);
+    if (!rootSignature || !pipelineState) {
+        return;
+    }
+
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 80, 40), L"Scene Camera Frustum Debug");
+    cmdList->SetGraphicsRootSignature(rootSignature);
+    cmdList->SetPipelineState(pipelineState->GetPSO());
+    cmdList->SetGraphicsRootConstantBufferView(
+        RendererState::DebugLineFrameIndex,
+        m_RendererState->GetFrameCBGPUVirtualAddress());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+    cmdList->IASetVertexBuffers(0, 1, &m_sceneCameraFrustumVBV);
+    cmdList->DrawInstanced(24, 1, 0, 0);
+    PIXEndEvent(cmdList);
+} // DebugSceneCameraFrustum

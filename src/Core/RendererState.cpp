@@ -14,6 +14,7 @@ float RendererState::aspectRatio = static_cast<float>(SharedCommons::SCREEN_WIDT
 UINT  RendererState::FrameCount = 2;
 UINT  RendererState::FrameCBIndex = 0;
 UINT  RendererState::LightCBIndex = 1;
+UINT  RendererState::DebugLineFrameIndex = 0;
 UINT  RendererState::WorldIndex = 2;
 UINT  RendererState::Tex0Index = 3;
 UINT  RendererState::Tex1Index = 4;
@@ -25,6 +26,7 @@ UINT  RendererState::InstanceDataIndex = 4;
 UINT  RendererState::VertexBufferIndexParam = 5;
 UINT  RendererState::BindlessTexIndex = 6;
 UINT  RendererState::BindlessBufIndex = 7;
+UINT  RendererState::ShadowMapIndex = 8;
 
 UINT  RendererState::CullingFrustumPlanesIndex = 3;
 UINT  RendererState::CullingMasterInstanceIndex = 4;
@@ -73,7 +75,7 @@ UINT  RendererState::StaticSamplerIndex = 0;
 DXGI_FORMAT RendererState::RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 RendererState::RendererState()
-    : m_mappedFrameCB(nullptr), m_mappedLightCB(nullptr) {
+    : m_mappedFrameCB(nullptr), m_mappedSceneFrameCB(nullptr), m_mappedLightCB(nullptr) {
 } // RendererState
 
 RendererState::~RendererState() {
@@ -111,6 +113,13 @@ bool RendererState::Init(ID3D12Device* device) {
     }
     m_frameCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedFrameCB));
 
+    if (FAILED(device->CreateCommittedResource(
+        &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &frameCBDesc,
+        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_sceneFrameCB)))) {
+        return false;
+    }
+    m_sceneFrameCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedSceneFrameCB));
+
     CD3DX12_RESOURCE_DESC lightCBDesc = CD3DX12_RESOURCE_DESC::Buffer(lightCBSize);
     if (FAILED(device->CreateCommittedResource(
         &uploadHeapProps, D3D12_HEAP_FLAG_NONE, &lightCBDesc,
@@ -136,6 +145,10 @@ void RendererState::Frame(const FrameParams& frameParams) {
     lightData.lookAt = frameParams.lookAt;
     lightData.lightViewMatrix = XMMatrixTranspose(frameParams.lightViewMatrix);
     lightData.lightProjectionMatrix = XMMatrixTranspose(frameParams.lightProjectionMatrix);
+    lightData.shadowMapWidth = frameParams.shadowMapWidth;
+    lightData.shadowMapHeight = frameParams.shadowMapHeight;
+    lightData.shadowBias = frameParams.shadowBias;
+    lightData.shadowSpread = frameParams.shadowSpread;
     
     // 매 프레임 갱신된 데이터를 Upload Heap에 복사
     if (m_mappedFrameCB) {
@@ -146,22 +159,43 @@ void RendererState::Frame(const FrameParams& frameParams) {
     }
 } // Frame
 
+void RendererState::FrameScene(const FrameParams& frameParams) {
+    GPUCommons::FrameCB frameData;
+    frameData.view = XMMatrixTranspose(frameParams.view);
+    frameData.projection = XMMatrixTranspose(frameParams.projection);
+    frameData.cameraPosition = frameParams.cameraPosition;
+    frameData.cameraFov = frameParams.cameraFov;
+
+    if (m_mappedSceneFrameCB) {
+        memcpy(m_mappedSceneFrameCB, &frameData, sizeof(GPUCommons::FrameCB));
+    }
+} // FrameScene
+
 void RendererState::Shutdown() {
     if (m_frameCB) {
         m_frameCB->Unmap(0, nullptr);
         m_frameCB.Reset();
+    }
+    if (m_sceneFrameCB) {
+        m_sceneFrameCB->Unmap(0, nullptr);
+        m_sceneFrameCB.Reset();
     }
     if (m_lightCB) {
         m_lightCB->Unmap(0, nullptr);
         m_lightCB.Reset();
     }
     m_mappedFrameCB = nullptr;
+    m_mappedSceneFrameCB = nullptr;
     m_mappedLightCB = nullptr;
 } // Shutdown
 
 D3D12_GPU_VIRTUAL_ADDRESS RendererState::GetFrameCBGPUVirtualAddress() const {
     return m_frameCB ? m_frameCB->GetGPUVirtualAddress() : 0;
 } // GetFrameCBGPUVirtualAddress
+
+D3D12_GPU_VIRTUAL_ADDRESS RendererState::GetSceneFrameCBGPUVirtualAddress() const {
+    return m_sceneFrameCB ? m_sceneFrameCB->GetGPUVirtualAddress() : 0;
+} // GetSceneFrameCBGPUVirtualAddress
 
 D3D12_GPU_VIRTUAL_ADDRESS RendererState::GetLightCBGPUVirtualAddress() const {
     return m_lightCB ? m_lightCB->GetGPUVirtualAddress() : 0;

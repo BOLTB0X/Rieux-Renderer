@@ -30,10 +30,17 @@ public:
     bool IsDPressed();
     bool IsZPressed();
     bool IsXPressed();
+    bool IsCPressed();
+    bool IsVPressed();
     bool IsF1Toggled();
 
     bool IsPgUpPressed();
     bool IsPgDownPressed();
+    bool IsUpPressed();
+    bool IsDownPressed();
+    bool IsLeftPressed();
+    bool IsRightPressed();
+    bool IsF2Toggled();
 
     void UpdateMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -61,6 +68,7 @@ private:
 
     int   m_windowCenterX, m_windowCenterY;
     bool  m_F1_released;
+    bool  m_F2_released;
     bool  m_prevMouseL;
     float m_sensitivity;
     float m_adjMouseX, m_adjMouseY;

@@ -50,14 +50,23 @@ public:
         float       moveForward;
         float       moveRight;
         float       moveUp;
+        float       masterMoveForward;
+        float       masterMoveRight;
+        float       masterMoveUp;
         float       rotationDeltaX;
         float       rotationDeltaY;
         float       zoomDelta;
+        float       sceneRotationDeltaX;
+        float       sceneRotationDeltaY;
+        bool        toggleCameraMode;
 
         FrameParams()
             : fps(0), playTime(0.0f), cpuPercentage(0.0f), cpuName(""),
             deltaTime(0.0f), moveForward(0.0f), moveRight(0.0f), moveUp(0.0f),
-            rotationDeltaX(0.0f), rotationDeltaY(0.0f), zoomDelta(0.0f) {
+            masterMoveForward(0.0f), masterMoveRight(0.0f), masterMoveUp(0.0f),
+            rotationDeltaX(0.0f), rotationDeltaY(0.0f), zoomDelta(0.0f),
+            sceneRotationDeltaX(0.0f), sceneRotationDeltaY(0.0f),
+            toggleCameraMode(false) {
         }
     }; // FrameParams
 
@@ -83,6 +92,7 @@ private:
 
     void FrustumPass(ID3D12GraphicsCommandList*);
     void DepthPass(ID3D12GraphicsCommandList*);
+    void ShadowPass(ID3D12GraphicsCommandList*);
     void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
     void OcclusionPhase2Pass(ID3D12GraphicsCommandList*);
     void SponzaPass(ID3D12GraphicsCommandList*);
@@ -93,6 +103,18 @@ private:
     void DebugDepthRenderTextures(ID3D12GraphicsCommandList*, RenderTexture*);
     void DebugHiZRenderTextures(ID3D12GraphicsCommandList*);
     void DebugBoundingBox(ID3D12GraphicsCommandList*);
+    void DebugSceneCameraFrustum(ID3D12GraphicsCommandList*);
+
+    Camera*       GetActiveCamera();
+    const Camera* GetActiveCamera() const;
+    bool          BuildSceneCameraFrustumBuffer();
+    void          UpdateSceneCameraFrustum();
+
+private:
+    struct DebugLineVertex {
+        DirectX::XMFLOAT3 position;
+        DirectX::XMFLOAT3 color;
+    };
 
 private:
     // --------------------------------------------------
@@ -110,7 +132,8 @@ private:
     // --------------------------------------------------
     std::unique_ptr<RendererState>           m_RendererState;
     std::unique_ptr<RenderQueue>             m_RenderQueue;
-    std::unique_ptr<Camera>                  m_Camera;
+    std::unique_ptr<Camera>                  m_SceneCamera;
+    std::unique_ptr<Camera>                  m_MasterCamera;
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
     std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
@@ -119,6 +142,10 @@ private:
     std::shared_ptr<TextureManager>          m_TextureManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
     FrameParams                              m_currentFrameParams;
+    bool                                     m_useMasterCamera;
+    Microsoft::WRL::ComPtr<ID3D12Resource>   m_sceneCameraFrustumBuffer;
+    D3D12_VERTEX_BUFFER_VIEW                  m_sceneCameraFrustumVBV;
+    DebugLineVertex*                          m_sceneCameraFrustumMappedData;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------

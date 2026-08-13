@@ -238,22 +238,22 @@ void OcclusionCuller::ReadbackToCPU(ID3D12GraphicsCommandList* cmdList) {
         UINT finalMainCount = *mappedMainCount;
         m_mainReadbackBuffer->Unmap(0, nullptr);
 
-        // 디버그 로그 출력
-        spdlog::debug("[OcclusionCuller] Final Main Count: {} / Max: {}", finalMainCount, m_maxMainCount);
+        //// 디버그 로그 출력
+        //spdlog::debug("[OcclusionCuller] Final Main Count: {} / Max: {}", finalMainCount, m_maxMainCount);
 
-        // 오버플로우 발생 여부 검사
-        bool isValid = (finalMainCount <= m_maxMainCount);
-        DebugHelper::SuccessCheck(isValid, "Main Buffer Capacity Overflow Detected!");
+        //// 오버플로우 발생 여부 검사
+        //bool isValid = (finalMainCount <= m_maxMainCount);
+        //DebugHelper::SuccessCheck(isValid, "Main Buffer Capacity Overflow Detected!");
     }
 
     if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVaseCount)))) {
         UINT finalVaseCount = *mappedVaseCount;
         m_vaseReadbackBuffer->Unmap(0, nullptr);
 
-        spdlog::debug("[OcclusionCuller] Final Vase Count: {} / Max: {}", finalVaseCount, m_maxVaseCount);
+        /*spdlog::debug("[OcclusionCuller] Final Vase Count: {} / Max: {}", finalVaseCount, m_maxVaseCount);
 
         bool isValid = (finalVaseCount <= m_maxVaseCount);
-        DebugHelper::SuccessCheck(isValid, "Vase Buffer Capacity Overflow Detected!");
+        DebugHelper::SuccessCheck(isValid, "Vase Buffer Capacity Overflow Detected!");*/
     }
 } // ReadbackToCPU
 
@@ -266,7 +266,6 @@ void OcclusionCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount, D
     ComPtr<ID3D12Resource>& outVisibleBuf, UINT& outVisibleDescIdx,
     ComPtr<ID3D12Resource>& outCounterBuf, UINT& outCounterDescIdx) {
 
-    // FrustumCuller의 구현과 완전히 동일하게 UAV를 생성
     UINT commandStructSize = sizeof(GPUCommons::IndirectCommand);
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
 

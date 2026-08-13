@@ -36,6 +36,7 @@ public: // Screen
     static UINT InstanceDataIndex;
     static UINT BindlessTexIndex;
     static UINT BindlessBufIndex;
+    static UINT ShadowMapIndex;
 
     static UINT CullingFrustumPlanesIndex;
     static UINT CullingMasterInstanceIndex;
@@ -73,6 +74,7 @@ public: // Screen
     static UINT DebugFrameIndex;
     static UINT DebugInstanceIndex;
     static UINT DebugInstanceDataIndex;
+    static UINT DebugLineFrameIndex;
 
     static UINT SharedHeapCapacity;
     static UINT RTVCapacity;
@@ -113,14 +115,18 @@ public:
 
     bool Init(ID3D12Device*);
     void Frame(const FrameParams&);
+    void FrameScene(const FrameParams&);
     void Shutdown();
 
     D3D12_GPU_VIRTUAL_ADDRESS GetFrameCBGPUVirtualAddress() const;
+    D3D12_GPU_VIRTUAL_ADDRESS GetSceneFrameCBGPUVirtualAddress() const;
     D3D12_GPU_VIRTUAL_ADDRESS GetLightCBGPUVirtualAddress() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource>   m_frameCB;
+    Microsoft::WRL::ComPtr<ID3D12Resource>   m_sceneFrameCB;
     Microsoft::WRL::ComPtr<ID3D12Resource>   m_lightCB;
     UINT8*                                   m_mappedFrameCB;
+    UINT8*                                   m_mappedSceneFrameCB;
     UINT8*                                   m_mappedLightCB;
 }; // RendererState

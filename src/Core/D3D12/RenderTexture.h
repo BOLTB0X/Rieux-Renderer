@@ -23,10 +23,12 @@ public:
         UINT                     mipLevels;
         DXGI_FORMAT              format;
         RenderTextureType        type;
+        float                    depthClearValue;
 
         InitParams()
             : device(nullptr), rtvAllocator(nullptr), dsvAllocator(nullptr), sharedDescriptorAllocator(nullptr),
-            width(0), height(0), mipLevels(1), format(DXGI_FORMAT_R16G16B16A16_FLOAT), type(RenderTextureType::Normal) {
+            width(0), height(0), mipLevels(1), format(DXGI_FORMAT_R16G16B16A16_FLOAT),
+            type(RenderTextureType::Normal), depthClearValue(0.0f) {
         }
     }; // InitDefaultParams
 
