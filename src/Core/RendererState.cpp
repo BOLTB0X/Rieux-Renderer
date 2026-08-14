@@ -75,7 +75,9 @@ UINT  RendererState::StaticSamplerIndex = 0;
 DXGI_FORMAT RendererState::RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 RendererState::RendererState()
-    : m_mappedFrameCB(nullptr), m_mappedSceneFrameCB(nullptr), m_mappedLightCB(nullptr) {
+    : m_mappedFrameCB(nullptr), m_mappedSceneFrameCB(nullptr), m_mappedLightCB(nullptr),
+    m_currentFrameParams{}, m_useMasterCamera(false), m_sceneCameraFrustumVBV{},
+    m_sceneCameraFrustumMappedData(nullptr) {
 } // RendererState
 
 RendererState::~RendererState() {
@@ -129,7 +131,7 @@ bool RendererState::Init(ID3D12Device* device) {
     m_lightCB->Map(0, nullptr, reinterpret_cast<void**>(&m_mappedLightCB));
 
     return true;
-}
+} // Init
 
 void RendererState::Frame(const FrameParams& frameParams) {
     GPUCommons::FrameCB frameData;
@@ -149,8 +151,7 @@ void RendererState::Frame(const FrameParams& frameParams) {
     lightData.shadowMapHeight = frameParams.shadowMapHeight;
     lightData.shadowBias = frameParams.shadowBias;
     lightData.shadowSpread = frameParams.shadowSpread;
-    
-    // 매 프레임 갱신된 데이터를 Upload Heap에 복사
+
     if (m_mappedFrameCB) {
         memcpy(m_mappedFrameCB, &frameData, sizeof(GPUCommons::FrameCB));
     }
@@ -187,7 +188,30 @@ void RendererState::Shutdown() {
     m_mappedFrameCB = nullptr;
     m_mappedSceneFrameCB = nullptr;
     m_mappedLightCB = nullptr;
+
+    if (m_sceneCameraFrustumBuffer) {
+        m_sceneCameraFrustumBuffer->Unmap(0, nullptr);
+        m_sceneCameraFrustumBuffer.Reset();
+    }
+    m_sceneCameraFrustumVBV = {};
+    m_sceneCameraFrustumMappedData = nullptr;
 } // Shutdown
+
+void RendererState::SetCurrentFrameParams(const RuntimeFrameParams& frameParams) {
+    m_currentFrameParams = frameParams;
+} // SetCurrentFrameParams
+
+const RendererState::RuntimeFrameParams& RendererState::GetCurrentFrameParams() const {
+    return m_currentFrameParams;
+} // GetCurrentFrameParams
+
+void RendererState::SetUseMasterCamera(bool useMasterCamera) {
+    m_useMasterCamera = useMasterCamera;
+} // SetUseMasterCamera
+
+bool RendererState::IsUsingMasterCamera() const {
+    return m_useMasterCamera;
+} // IsUsingMasterCamera
 
 D3D12_GPU_VIRTUAL_ADDRESS RendererState::GetFrameCBGPUVirtualAddress() const {
     return m_frameCB ? m_frameCB->GetGPUVirtualAddress() : 0;

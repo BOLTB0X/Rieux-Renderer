@@ -1,5 +1,6 @@
 #include "Pch.h"
 #include "Renderer.h"
+#include "RendererDebugger.h"
 #include "RendererState.h"
 // D3D12
 #include "D3D12Device.h"
@@ -35,17 +36,15 @@
 #include <pix3.h>
 
 using namespace DebugHelper;
-using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-Renderer::Renderer()
-    : m_currentFrameParams{}, m_useMasterCamera(false), m_sceneCameraFrustumVBV{},
-    m_sceneCameraFrustumMappedData(nullptr) {
+Renderer::Renderer() {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
     m_SceneRenderTarget = std::make_unique<RenderTarget>();
     m_RendererState = std::make_unique<RendererState>();
+    m_RendererDebugger = std::make_unique<RendererDebugger>();
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
@@ -101,6 +100,7 @@ void Renderer::Shutdown() {
     m_ImGuiManager.reset();
 
     // LoadAssets 해제
+    m_RendererDebugger->Shutdown();
     m_OcclusionCuller.reset();
     m_HierarchicalZBuffer.reset();
 	m_FrustumCuller.reset();
@@ -111,12 +111,6 @@ void Renderer::Shutdown() {
     // LoadSceneRenderTarget 해제
     m_SceneRenderTarget.reset();
     m_RenderTextureManager.reset();
-
-    if (m_sceneCameraFrustumBuffer) {
-        m_sceneCameraFrustumBuffer->Unmap(0, nullptr);
-        m_sceneCameraFrustumBuffer.Reset();
-    }
-    m_sceneCameraFrustumMappedData = nullptr;
 
     // LoadPipeline  해제
     m_GPUMonitor.reset();
@@ -137,18 +131,19 @@ void Renderer::Shutdown() {
     m_DirectionalLight.reset();
     m_MasterCamera.reset();
     m_SceneCamera.reset();
+
     // 디바이스 최종 해제
     m_D3D12Device.reset();
 } // Shutdown
 
 bool Renderer::Frame(const FrameParams& frameParams) {
-    m_currentFrameParams = frameParams;
+    m_RendererState->SetCurrentFrameParams(frameParams);
     bool enteredMasterCamera = false;
 
     if (frameParams.toggleCameraMode) {
-        m_useMasterCamera = !m_useMasterCamera;
+        m_RendererState->SetUseMasterCamera(!m_RendererState->IsUsingMasterCamera());
 
-        if (m_useMasterCamera) {
+        if (m_RendererState->IsUsingMasterCamera()) {
             enteredMasterCamera = true;
             m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
             m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
@@ -158,9 +153,9 @@ bool Renderer::Frame(const FrameParams& frameParams) {
             m_MasterCamera->SetFar(m_SceneCamera->GetFar());
             m_MasterCamera->Update();
         }
-    }
+    } // if (frameParams.toggleCameraMode)
 
-    if (m_useMasterCamera) {
+    if (m_RendererState->IsUsingMasterCamera()) {
         if (!enteredMasterCamera) {
             m_MasterCamera->Frame(
                 frameParams.masterMoveForward,
@@ -187,7 +182,7 @@ bool Renderer::Frame(const FrameParams& frameParams) {
             frameParams.rotationDeltaX,
             frameParams.rotationDeltaY,
             frameParams.zoomDelta);
-    }
+    } // if - else
 
     m_FrustumCuller->Frame(m_SceneCamera->GetViewMatrix(), m_SceneCamera->GetStandardZProjectionMatrix());
     m_DirectionalLight->Frame();
@@ -200,7 +195,7 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     occParams.screenHeight = static_cast<float>(RendererState::ScreenHeight);
     m_OcclusionCuller->Frame(occParams);
 
-    Camera* renderCamera = GetActiveCamera();
+    Camera* renderCamera = m_RendererDebugger->GetActiveCamera();
     RendererState::FrameParams stateParams;
     stateParams.view = renderCamera->GetViewMatrix();
     stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
@@ -225,7 +220,7 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
     m_RendererState->FrameScene(sceneFrameParams);
 
-    UpdateSceneCameraFrustum();
+    m_RendererDebugger->Frame();
     
     return Render();
 } // Frame
@@ -235,13 +230,8 @@ bool Renderer::Render() {
 
     PopulateCommandList();
 
-    // 커맨드 리스트 실행 위임
     m_CommandQueue->Execute();
-
-    // 후면 버퍼를 전면 버퍼로 교체
     m_SwapChain->Present(true);
-
-    // 다음 프레임을 위해 동기화 수행
     m_CommandQueue->WaitForPreviousFrame();
 
     return true;
@@ -395,7 +385,18 @@ bool Renderer::LoadAssets(HWND hwnd) {
         return false;
     }
 
-    if (!BuildSceneCameraFrustumBuffer()) {
+    RendererDebugger::InitParams debuggerInitParams = {};
+    debuggerInitParams.device = device;
+    debuggerInitParams.rendererState = m_RendererState.get();
+    debuggerInitParams.renderTextureManager = m_RenderTextureManager.get();
+    debuggerInitParams.swapChain = m_SwapChain.get();
+    debuggerInitParams.psoManager = m_PSOManager.get();
+    debuggerInitParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    debuggerInitParams.sceneCamera = m_SceneCamera.get();
+    debuggerInitParams.masterCamera = m_MasterCamera.get();
+    debuggerInitParams.occlusionCuller = m_OcclusionCuller.get();
+    debuggerInitParams.sponza = m_Sponza.get();
+    if (!m_RendererDebugger->Init(debuggerInitParams)) {
         DebugHelper::DebugPrint("씬 카메라 절두체 버퍼 생성 실패");
         return false;
     }
@@ -515,7 +516,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
-    DebugSceneCameraFrustum(cmdList);
+    m_RendererDebugger->DebugSceneCameraFrustum(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
@@ -628,7 +629,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     m_HierarchicalZBuffer->Build(hizParams);
     PIXEndEvent(cmdList);
 
-    //DebugHiZRenderTextures(cmdList);
+    //m_RendererDebugger->DebugHiZRenderTextures(cmdList);
 } // DepthPass
 
 void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
@@ -719,12 +720,13 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 
-    //DebugBoundingBox(cmdList);
+    //m_RendererDebugger->DebugBoundingBox(cmdList);
 
 } // SponzaPass
 
 void Renderer::OnGUI() {
-    ImGui::Text("Camera Mode: %s", m_useMasterCamera ? "Master View" : "Scene View");
+    const FrameParams& currentFrameParams = m_RendererState->GetCurrentFrameParams();
+    ImGui::Text("Camera Mode: %s", m_RendererState->IsUsingMasterCamera() ? "Master View" : "Scene View");
     ImGui::Text("F2: Toggle Scene/Master View");
     ImGui::Text("Scene View: WASD/Z/X + LMB");
     ImGui::Text("Master View: Arrow/C/V + LMB");
@@ -732,13 +734,13 @@ void Renderer::OnGUI() {
     ImGui::Separator();
 
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[ HARDWARE ]");
-    ImGui::Text("CPU: %s", m_currentFrameParams.cpuName.c_str());
+    ImGui::Text("CPU: %s", currentFrameParams.cpuName.c_str());
     ImGui::Text("GPU: %s", m_GPUMonitor->GetName().c_str());
     ImGui::Separator();
 
     ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ METRICS ]");
-    ImGui::Text("FPS: %d (%.2f ms)", m_currentFrameParams.fps, m_currentFrameParams.deltaTime * 1000.0f);
-    ImGui::Text("CPU Usage: %ld %%", m_currentFrameParams.cpuPercentage);
+    ImGui::Text("FPS: %d (%.2f ms)", currentFrameParams.fps, currentFrameParams.deltaTime * 1000.0f);
+    ImGui::Text("CPU Usage: %ld %%", currentFrameParams.cpuPercentage);
 
     float vramUsage = m_GPUMonitor->GetVRAMUsageMB();
     float vramTotal = m_GPUMonitor->GetVRAMTotalMB();
@@ -754,217 +756,3 @@ void Renderer::OnGUI() {
     ImGui::ProgressBar(static_cast<float>(passTime / 16.6), ImVec2(200.0f, 0.0f), "");
     ImGui::Separator();
 } // OnGUI
-
-void Renderer::DebugDepthRenderTextures(ID3D12GraphicsCommandList* cmdList, RenderTexture* depthTexture) {
-    PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
-    {
-        auto debugDepthTex = m_RenderTextureManager->CreateRenderTexture(
-            "Depth_Debug",
-            depthTexture->GetWidth(),
-            depthTexture->GetHeight(),
-            RenderTexture::RenderTextureType::Normal,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            1
-        ).get();
-        debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        D3D12_CPU_DESCRIPTOR_HANDLE debugRtvHandle = debugDepthTex->GetRTVHandle();
-        cmdList->OMSetRenderTargets(1, &debugRtvHandle, FALSE, nullptr);
-
-        cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
-        cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
-        cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
-        cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
-
-        const Camera* activeCamera = GetActiveCamera();
-        struct { float nearPlane; float farPlane; } cameraClip = { activeCamera->GetNear(), activeCamera->GetFar() };
-        cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
-
-        cmdList->SetGraphicsRootDescriptorTable(
-            RendererState::DebugDepthTexIndex,
-            m_sharedDescriptorAllocator->GetGPUHandle(depthTexture->GetSRVIndex()));
-
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        cmdList->DrawInstanced(3, 1, 0, 0);
-
-        debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    }
-
-    PIXEndEvent(cmdList);
-} // DebugRenderTextures
-
-void Renderer::DebugHiZRenderTextures(ID3D12GraphicsCommandList* cmdList) {
-    HierarchicalZBuffer::BuildParams hizParams;
-    hizParams.cmdList = cmdList;
-    hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
-    hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
-    PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
-    {
-        auto hizTexture = hizParams.hizTexture;
-
-        auto hizDebugTex = m_RenderTextureManager->CreateRenderTexture(
-            "HiZ_Depth_Debug",
-            hizTexture->GetWidth(),
-            hizTexture->GetHeight(),
-            RenderTexture::RenderTextureType::Normal,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            1
-        ).get();
-
-        hizTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        D3D12_CPU_DESCRIPTOR_HANDLE hizDebugRtv = hizDebugTex->GetRTVHandle();
-        cmdList->OMSetRenderTargets(1, &hizDebugRtv, FALSE, nullptr);
-
-        D3D12_VIEWPORT hizViewport = { 0.0f, 0.0f, static_cast<float>(hizTexture->GetWidth()), static_cast<float>(hizTexture->GetHeight()), 0.0f, 1.0f };
-        D3D12_RECT hizScissor = { 0, 0, static_cast<LONG>(hizTexture->GetWidth()), static_cast<LONG>(hizTexture->GetHeight()) };
-        cmdList->RSSetViewports(1, &hizViewport);
-        cmdList->RSSetScissorRects(1, &hizScissor);
-
-        cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
-        cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
-
-        const Camera* activeCamera = GetActiveCamera();
-        struct { float nearPlane; float farPlane; } cameraClip = { activeCamera->GetNear(), activeCamera->GetFar() };
-        cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
-
-        cmdList->SetGraphicsRootDescriptorTable(
-            RendererState::DebugDepthTexIndex,
-            m_sharedDescriptorAllocator->GetGPUHandle(hizTexture->GetSRVIndex()));
-
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        cmdList->DrawInstanced(3, 1, 0, 0);
-
-        hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    }
-
-    PIXEndEvent(cmdList);
-} // DebugHiZRenderTextures
-
-void Renderer::DebugBoundingBox(ID3D12GraphicsCommandList* cmdList) {
-    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Debug AABB Pass");
-
-    Sponza::RenderDebugParams debugParams;
-    debugParams.cmdList = cmdList;
-    debugParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
-    debugParams.mainCmdBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
-    debugParams.mainCounter = m_OcclusionCuller->GetFinalMainCounterBuffer();
-    debugParams.vaseCmdBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
-    debugParams.vaseCounter = m_OcclusionCuller->GetFinalVaseCounterBuffer();
-
-    m_Sponza->RenderDebugAABB(debugParams);
-
-    PIXEndEvent(cmdList);
-} // DebugBoundingBox
-
-Camera* Renderer::GetActiveCamera() {
-    return m_useMasterCamera ? m_MasterCamera.get() : m_SceneCamera.get();
-} // GetActiveCamera
-
-const Camera* Renderer::GetActiveCamera() const {
-    return m_useMasterCamera ? m_MasterCamera.get() : m_SceneCamera.get();
-} // GetActiveCamera
-
-bool Renderer::BuildSceneCameraFrustumBuffer() {
-    if (!m_D3D12Device || !m_D3D12Device->GetDevice()) {
-        return false;
-    }
-
-    const UINT vertexCount = 24;
-    CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
-    CD3DX12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(
-        sizeof(DebugLineVertex) * vertexCount);
-
-    if (FAILED(m_D3D12Device->GetDevice()->CreateCommittedResource(
-        &uploadHeap,
-        D3D12_HEAP_FLAG_NONE,
-        &bufferDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr,
-        IID_PPV_ARGS(&m_sceneCameraFrustumBuffer)))) {
-        return false;
-    }
-
-    if (FAILED(m_sceneCameraFrustumBuffer->Map(
-        0,
-        nullptr,
-        reinterpret_cast<void**>(&m_sceneCameraFrustumMappedData)))) {
-        m_sceneCameraFrustumBuffer.Reset();
-        return false;
-    }
-
-    m_sceneCameraFrustumVBV.BufferLocation = m_sceneCameraFrustumBuffer->GetGPUVirtualAddress();
-    m_sceneCameraFrustumVBV.SizeInBytes = sizeof(DebugLineVertex) * vertexCount;
-    m_sceneCameraFrustumVBV.StrideInBytes = sizeof(DebugLineVertex);
-    UpdateSceneCameraFrustum();
-    return true;
-} // BuildSceneCameraFrustumBuffer
-
-void Renderer::UpdateSceneCameraFrustum() {
-    if (!m_sceneCameraFrustumMappedData || !m_SceneCamera) {
-        return;
-    }
-
-    const XMMATRIX viewProjection = m_SceneCamera->GetViewMatrix()
-        * m_SceneCamera->GetStandardZProjectionMatrix();
-    const XMMATRIX inverseViewProjection = XMMatrixInverse(nullptr, viewProjection);
-
-    const XMFLOAT3 ndcCorners[8] = {
-        { -1.0f, -1.0f, 0.0f }, { 1.0f, -1.0f, 0.0f },
-        { 1.0f, 1.0f, 0.0f }, { -1.0f, 1.0f, 0.0f },
-        { -1.0f, -1.0f, 1.0f }, { 1.0f, -1.0f, 1.0f },
-        { 1.0f, 1.0f, 1.0f }, { -1.0f, 1.0f, 1.0f }
-    };
-
-    XMFLOAT3 worldCorners[8] = {};
-    for (int i = 0; i < 8; ++i) {
-        const XMVECTOR ndc = XMLoadFloat3(&ndcCorners[i]);
-        XMStoreFloat3(&worldCorners[i], XMVector3TransformCoord(ndc, inverseViewProjection));
-    }
-
-    const XMFLOAT3 nearColor = { 1.0f, 0.2f, 0.1f };
-    const XMFLOAT3 farColor = { 1.0f, 0.8f, 0.1f };
-
-    auto writeLine = [this](UINT index, const XMFLOAT3& a, const XMFLOAT3& b, const XMFLOAT3& color) {
-        m_sceneCameraFrustumMappedData[index * 2] = { a, color };
-        m_sceneCameraFrustumMappedData[index * 2 + 1] = { b, color };
-    };
-
-    writeLine(0, worldCorners[0], worldCorners[1], nearColor);
-    writeLine(1, worldCorners[1], worldCorners[2], nearColor);
-    writeLine(2, worldCorners[2], worldCorners[3], nearColor);
-    writeLine(3, worldCorners[3], worldCorners[0], nearColor);
-    writeLine(4, worldCorners[4], worldCorners[5], farColor);
-    writeLine(5, worldCorners[5], worldCorners[6], farColor);
-    writeLine(6, worldCorners[6], worldCorners[7], farColor);
-    writeLine(7, worldCorners[7], worldCorners[4], farColor);
-    writeLine(8, worldCorners[0], worldCorners[4], nearColor);
-    writeLine(9, worldCorners[1], worldCorners[5], nearColor);
-    writeLine(10, worldCorners[2], worldCorners[6], nearColor);
-    writeLine(11, worldCorners[3], worldCorners[7], nearColor);
-} // UpdateSceneCameraFrustum
-
-void Renderer::DebugSceneCameraFrustum(ID3D12GraphicsCommandList* cmdList) {
-    if (!m_useMasterCamera || !m_sceneCameraFrustumBuffer || !m_PSOManager) {
-        return;
-    }
-
-    ID3D12RootSignature* rootSignature = m_PSOManager->GetID3D12RootSignature(
-        SharedCommons::KEY_DEBUG_LINE_SIG);
-    D3D12PipelineState* pipelineState = m_PSOManager->GetPSO(
-        SharedCommons::KEY_DEBUG_LINE_PSO);
-    if (!rootSignature || !pipelineState) {
-        return;
-    }
-
-    PIXBeginEvent(cmdList, PIX_COLOR(255, 80, 40), L"Scene Camera Frustum Debug");
-    cmdList->SetGraphicsRootSignature(rootSignature);
-    cmdList->SetPipelineState(pipelineState->GetPSO());
-    cmdList->SetGraphicsRootConstantBufferView(
-        RendererState::DebugLineFrameIndex,
-        m_RendererState->GetFrameCBGPUVirtualAddress());
-    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-    cmdList->IASetVertexBuffers(0, 1, &m_sceneCameraFrustumVBV);
-    cmdList->DrawInstanced(24, 1, 0, 0);
-    PIXEndEvent(cmdList);
-} // DebugSceneCameraFrustum

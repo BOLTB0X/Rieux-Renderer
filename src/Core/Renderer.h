@@ -8,6 +8,7 @@
 #include <DirectXMath.h>
 #include <string>
 #include <memory>
+#include "RendererState.h"
 
 class D3D12Device;
 class CommandQueue;
@@ -29,10 +30,12 @@ class ImGuiManager;
 class RenderTexture;
 class RenderTextureManager;
 class Sponza;
-class RendererState;
+class RendererDebugger;
 
 class Renderer {
 public:
+    using FrameParams = RendererState::RuntimeFrameParams;
+
     struct InitParams {
         HWND                          hwnd;
         std::shared_ptr<ImGuiManager> imGuiManager;
@@ -41,36 +44,6 @@ public:
         }
     }; // InitDefaultParams
 
-    struct FrameParams {
-        int         fps;
-        float       playTime;
-        float       cpuPercentage;
-        std::string cpuName;
-        float       deltaTime;
-        float       moveForward;
-        float       moveRight;
-        float       moveUp;
-        float       masterMoveForward;
-        float       masterMoveRight;
-        float       masterMoveUp;
-        float       rotationDeltaX;
-        float       rotationDeltaY;
-        float       zoomDelta;
-        float       sceneRotationDeltaX;
-        float       sceneRotationDeltaY;
-        bool        toggleCameraMode;
-
-        FrameParams()
-            : fps(0), playTime(0.0f), cpuPercentage(0.0f), cpuName(""),
-            deltaTime(0.0f), moveForward(0.0f), moveRight(0.0f), moveUp(0.0f),
-            masterMoveForward(0.0f), masterMoveRight(0.0f), masterMoveUp(0.0f),
-            rotationDeltaX(0.0f), rotationDeltaY(0.0f), zoomDelta(0.0f),
-            sceneRotationDeltaX(0.0f), sceneRotationDeltaY(0.0f),
-            toggleCameraMode(false) {
-        }
-    }; // FrameParams
-
-public:
     Renderer();
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
@@ -100,23 +73,6 @@ private:
     void OnGUI();
 
 private:
-    void DebugDepthRenderTextures(ID3D12GraphicsCommandList*, RenderTexture*);
-    void DebugHiZRenderTextures(ID3D12GraphicsCommandList*);
-    void DebugBoundingBox(ID3D12GraphicsCommandList*);
-    void DebugSceneCameraFrustum(ID3D12GraphicsCommandList*);
-
-    Camera*       GetActiveCamera();
-    const Camera* GetActiveCamera() const;
-    bool          BuildSceneCameraFrustumBuffer();
-    void          UpdateSceneCameraFrustum();
-
-private:
-    struct DebugLineVertex {
-        DirectX::XMFLOAT3 position;
-        DirectX::XMFLOAT3 color;
-    };
-
-private:
     // --------------------------------------------------
     // 파이프라인 객체
     // --------------------------------------------------
@@ -131,6 +87,7 @@ private:
     // 공용 데이터
     // --------------------------------------------------
     std::unique_ptr<RendererState>           m_RendererState;
+    std::unique_ptr<RendererDebugger>        m_RendererDebugger;
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_SceneCamera;
     std::unique_ptr<Camera>                  m_MasterCamera;
@@ -141,11 +98,6 @@ private:
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
-    FrameParams                              m_currentFrameParams;
-    bool                                     m_useMasterCamera;
-    Microsoft::WRL::ComPtr<ID3D12Resource>   m_sceneCameraFrustumBuffer;
-    D3D12_VERTEX_BUFFER_VIEW                  m_sceneCameraFrustumVBV;
-    DebugLineVertex*                          m_sceneCameraFrustumMappedData;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------
