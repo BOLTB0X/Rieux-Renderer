@@ -30,6 +30,8 @@ Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{},
     m_psoWireNoCull = nullptr;
     m_psoDepthAlpha = nullptr;
     m_psoDepthSolid = nullptr;
+    m_psoShadowAlpha = nullptr;
+    m_psoShadowSolid = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // Sponza
@@ -43,6 +45,8 @@ Sponza::~Sponza() {
     m_psoWireNoCull = nullptr;
     m_psoDepthAlpha = nullptr;
     m_psoDepthSolid = nullptr;
+    m_psoShadowAlpha = nullptr;
+    m_psoShadowSolid = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // ~Sponza
@@ -82,6 +86,8 @@ bool Sponza::Init(const InitParams& params) {
     m_psoWireNoCull = params.psoWireNoCull;
 	m_psoDepthSolid = params.psoDepthSolid;
 	m_psoDepthAlpha = params.psoDepthAlpha;
+    m_psoShadowSolid = params.psoShadowSolid;
+    m_psoShadowAlpha = params.psoShadowAlpha;
     m_psoDebug = params.psoDebug;
     return true;
 } // Init
@@ -95,15 +101,23 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
     cmdList->SetGraphicsRootDescriptorTable(RendererState::InstanceDataIndex, GetInstanceDataGPUHandle());
     cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessTexIndex, m_heapAllocator->GetGPUHandle(0));
     cmdList->SetGraphicsRootDescriptorTable(RendererState::BindlessBufIndex, m_heapAllocator->GetGPUHandle(0));
+    if (params.shadowMapDescriptorIndex != UINT_MAX) {
+        cmdList->SetGraphicsRootDescriptorTable(
+            RendererState::ShadowMapIndex,
+            m_heapAllocator->GetGPUHandle(params.shadowMapDescriptorIndex));
+    }
 
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
 
     ID3D12PipelineState* mainPSO;
     ID3D12PipelineState* sidePSO;
     if (params.type == SubmitIndirectType::General) {
         mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
         sidePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;
+    }
+    else if (params.type == SubmitIndirectType::Shadow) {
+        mainPSO = m_psoShadowSolid;
+        sidePSO = m_psoShadowAlpha;
     }
     else {
         mainPSO = m_psoDepthSolid;
@@ -216,9 +230,20 @@ bool Sponza::BuildInstanceDataBuffer(ID3D12Device* device, const int gridSize, c
 
                 unsigned int matIdx = mesh->GetMaterialIndex();
                 if (matIdx < m_materials.size()) {
-                    data.albedoIndex = m_materials[matIdx].albedo->GetSRVIndex();
-                    data.normalIndex = m_materials[matIdx].normal->GetSRVIndex();
-                    data.alphaIndex = m_materials[matIdx].alpha->GetSRVIndex();
+                    const auto& material = m_materials[matIdx];
+                    data.albedoIndex = material.albedo->GetSRVIndex();
+                    data.normalIndex = material.normal->GetSRVIndex();
+                    data.alphaIndex = material.alpha->GetSRVIndex();
+                    data.albedoFactor = material.albedoFactor;
+                    data.metallicFactor = material.metallicFactor;
+                    data.roughnessFactor = material.roughnessFactor;
+
+                    if (material.metallic) {
+                        data.metallicIndex = material.metallic->GetSRVIndex();
+                    }
+                    if (material.roughness) {
+                        data.roughnessIndex = material.roughness->GetSRVIndex();
+                    }
                 }
 
                 std::string meshName = mesh->GetName();

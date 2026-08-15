@@ -47,7 +47,7 @@ bool RenderTexture::Init(const InitParams& params) {
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
         clearValue.Format = DXGI_FORMAT_D32_FLOAT;
-        clearValue.DepthStencil.Depth = 0.0f;
+        clearValue.DepthStencil.Depth = params.depthClearValue;
         clearValue.DepthStencil.Stencil = 0;
     }
     else {

@@ -63,7 +63,12 @@ namespace GPUCommons {
         float             padding2;
 
         float             isVase;
+        uint32_t          metallicIndex;
+        uint32_t          roughnessIndex;
+        float             metallicFactor;
+        float             roughnessFactor;
         DirectX::XMFLOAT3 padding3;
+        DirectX::XMFLOAT4 albedoFactor;
 
         MeshInstanceData()
             : worldMatrix(DirectX::XMMatrixIdentity()),
@@ -71,9 +76,14 @@ namespace GPUCommons {
             albedoIndex(0), normalIndex(0), alphaIndex(0),
             aabbMin(0.0f, 0.0f, 0.0f), padding1(0.0f),
             aabbMax(0.0f, 0.0f, 0.0f), padding2(0.0f),
-            isVase(0.0), padding3(0.0f, 0.0f, 0.0f) {
+            isVase(0.0f), metallicIndex(UINT_MAX), roughnessIndex(UINT_MAX),
+            metallicFactor(SharedCommons::METALLIC_FACTOR),
+            roughnessFactor(SharedCommons::ROUGH_FACTOR),
+            padding3(0.0f, 0.0f, 0.0f), albedoFactor(SharedCommons::ALBEDO_FACTOR) {
 		}
     }; // MeshInstanceData
+
+    static_assert(sizeof(MeshInstanceData) == 160, "MeshInstanceData layout mismatch");
 
     struct GPUIndexBufferView {
         uint32_t address[2];
@@ -98,10 +108,12 @@ namespace GPUCommons {
         DirectX::XMMATRIX viewProj;
         float             screenWidth;
         float             screenHeight;
+        uint32_t          mainCapacity;
+        uint32_t          vaseCapacity;
         DirectX::XMFLOAT2 padding;
 
         OcclusionCullingCB() : viewProj(DirectX::XMMatrixIdentity())
-            , screenWidth(0.0f), screenHeight(0.0f), padding(0.0f, 0.0f) {
+            , screenWidth(0.0f), screenHeight(0.0f), mainCapacity(0), vaseCapacity(0), padding(0.0f, 0.0f) {
         }
     }; // OcclusionCullingCB
 } // struct

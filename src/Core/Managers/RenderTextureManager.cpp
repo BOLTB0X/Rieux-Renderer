@@ -77,6 +77,24 @@ bool RenderTextureManager::Init(const InitParams& params) {
 
     m_renderTextures[SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE] = m_hzTex;
 
+    auto shadowTex = std::make_shared<RenderTexture>();
+    RenderTexture::InitParams shadowParams;
+    shadowParams.device = m_device;
+    shadowParams.rtvAllocator = m_rtvAllocator.get();
+    shadowParams.dsvAllocator = m_dsvAllocator.get();
+    shadowParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator;
+    shadowParams.width = static_cast<UINT>(SharedCommons::SHADOWMAP_WIDTH);
+    shadowParams.height = static_cast<UINT>(SharedCommons::SHADOWMAP_HEIGHT);
+    shadowParams.type = RenderTexture::RenderTextureType::Depth;
+    shadowParams.depthClearValue = 1.0f;
+
+    if (!shadowTex->Init(shadowParams)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+        return false;
+    }
+
+    m_renderTextures[SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE] = shadowTex;
+
     return true;
 } // Init
 

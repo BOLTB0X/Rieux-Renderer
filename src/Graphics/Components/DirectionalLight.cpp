@@ -124,9 +124,6 @@ void DirectionalLight::OnGUI() {
             }
             Frame(); // 행렬 갱신
         }
-
-        ImGui::ColorEdit4("Diffuse Color", &m_diffuse.x);
-
         ImGui::Spacing();
         ImGui::Separator();
 

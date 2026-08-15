@@ -68,4 +68,6 @@ ConstantBuffer<DirectionalLight> g_DirectionalLightCB : register(b1);
 #define SHADOW_BIAS       g_DirectionalLightCB.shadowBias
 #define SHADOW_SPREAD     g_DirectionalLightCB.shadowSpread
 
+#define PI                3.14159265f
+
 #endif // _COMMONS_HLSLI_

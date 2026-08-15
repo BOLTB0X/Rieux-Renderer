@@ -14,7 +14,7 @@ void main(PS_IN input)
     if (input.alphaIdx == 0xFFFFFFFF)
         return;
 
-    float alpha = g_Textures[input.alphaIdx].Sample(g_Sampler, input.uv).a;
+    float alpha = g_Textures[NonUniformResourceIndex(input.alphaIdx)].Sample(g_Sampler, input.uv).r;
 
     clip(alpha - 0.1f);
 } // main

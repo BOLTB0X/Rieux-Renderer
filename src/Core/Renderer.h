@@ -8,6 +8,7 @@
 #include <DirectXMath.h>
 #include <string>
 #include <memory>
+#include "RendererState.h"
 
 class D3D12Device;
 class CommandQueue;
@@ -26,12 +27,15 @@ class GPUMonitor;
 class TextureManager;
 class DescriptorHeapAllocator;
 class ImGuiManager;
+class RenderTexture;
 class RenderTextureManager;
 class Sponza;
-class RendererState;
+class RendererDebugger;
 
 class Renderer {
 public:
+    using FrameParams = RendererState::RuntimeFrameParams;
+
     struct InitParams {
         HWND                          hwnd;
         std::shared_ptr<ImGuiManager> imGuiManager;
@@ -40,27 +44,6 @@ public:
         }
     }; // InitDefaultParams
 
-    struct FrameParams {
-        int         fps;
-        float       playTime;
-        float       cpuPercentage;
-        std::string cpuName;
-        float       deltaTime;
-        float       moveForward;
-        float       moveRight;
-        float       moveUp;
-        float       rotationDeltaX;
-        float       rotationDeltaY;
-        float       zoomDelta;
-
-        FrameParams()
-            : fps(0), playTime(0.0f), cpuPercentage(0.0f), cpuName(""),
-            deltaTime(0.0f), moveForward(0.0f), moveRight(0.0f), moveUp(0.0f),
-            rotationDeltaX(0.0f), rotationDeltaY(0.0f), zoomDelta(0.0f) {
-        }
-    }; // FrameParams
-
-public:
     Renderer();
     Renderer(const Renderer&) = delete;
     Renderer& operator=(const Renderer&) = delete;
@@ -82,7 +65,9 @@ private:
 
     void FrustumPass(ID3D12GraphicsCommandList*);
     void DepthPass(ID3D12GraphicsCommandList*);
-    void OcclusionPass(ID3D12GraphicsCommandList*);
+    void ShadowPass(ID3D12GraphicsCommandList*);
+    void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
+    void OcclusionPhase2Pass(ID3D12GraphicsCommandList*);
     void SponzaPass(ID3D12GraphicsCommandList*);
 
     void OnGUI();
@@ -102,16 +87,17 @@ private:
     // 공용 데이터
     // --------------------------------------------------
     std::unique_ptr<RendererState>           m_RendererState;
+    std::unique_ptr<RendererDebugger>        m_RendererDebugger;
     std::unique_ptr<RenderQueue>             m_RenderQueue;
-    std::unique_ptr<Camera>                  m_Camera;
+    std::unique_ptr<Camera>                  m_SceneCamera;
+    std::unique_ptr<Camera>                  m_MasterCamera;
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
-    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuilder;
+    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
-    FrameParams                              m_currentFrameParams;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------

@@ -1,15 +1,7 @@
 // GPU_PBRModelVS.hlsl
 #include "Commons.hlsli"
 #include "GPUDriven.hlsli"
-
-struct PBRVertex
-{
-    float3 position;
-    float2 texcoord;
-    float3 normal;
-    float3 tangent;
-    float3 binormal;
-}; // PBRVertex
+#include "PBR.hlsli"
 
 struct VS_OUT
 {

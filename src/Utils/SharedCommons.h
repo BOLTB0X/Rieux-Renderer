@@ -13,7 +13,7 @@ namespace SharedCommons {
     static constexpr bool  VSYNC_ENABLED = true;
     static constexpr int   SCREEN_WIDTH = 800;
     static constexpr int   SCREEN_HEIGHT = 600;
-    static constexpr float SCREEN_DEPTH = 8000.0f;
+    static constexpr float SCREEN_DEPTH = 4000.0f;
     static constexpr float SCREEN_NEAR = 0.1f;
     static constexpr int   CUBE_MAP_SIZE = 512;
     ////////////////////////////////////////////////////////////////////////////////////////
@@ -33,21 +33,22 @@ namespace SharedCommons {
 
     ///////////////////////////////////////////////////////////////////////////////////////
 	// 그림자
-    static constexpr float SHADOW_VIEW_WIDTH = 2000.0f;
-    static constexpr float SHADOW_VIEW_HEIGHT = 2000.0f;
+    static constexpr float SHADOW_VIEW_WIDTH = 1000.0f;
+    static constexpr float SHADOW_VIEW_HEIGHT = 1000.0f;
     static constexpr float SHADOW_NEAR_Z = 0.1f;
     static constexpr float SHADOW_FAR_Z = 2000.0f;
     static constexpr float SHADOWMAP_WIDTH = 2048;
     static constexpr float SHADOWMAP_HEIGHT = 2048;
+    static constexpr float SHADOW_BIAS = 0.0008f;
+    static constexpr float SHADOW_SPREAD = 1.0f;
     ///////////////////////////////////////////////////////////////////////////////////////
 
 } // SharedCommons
 
-
 namespace SharedCommons {
     static constexpr DirectX::XMFLOAT3 LIGHT_DIR = { 0.0f, -1.0f, 0.0f };
     static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 1.0f, 0.98f, 0.96f, 1.0f };
-    static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.15f, 0.15f, 0.15f, 1.0f };
+    static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.45f, 0.45f, 0.45f, 1.0f };
 
 } // CB
 
@@ -72,9 +73,12 @@ namespace SharedCommons {
     static const std::string  CULLING_CS_STR = "FrustumCullingCS";
 
     static const std::wstring DEPTH_VS = L"HLSL/DepthVS.hlsl";
+    static const std::wstring SHADOW_VS = L"HLSL/ShadowVS.hlsl";
     static const std::wstring DEPTH_PS = L"HLSL/DepthPS.hlsl";
 
+
     static const std::string  DEPTH_VS_STR = "DepthVS";
+    static const std::string  SHADOW_VS_STR = "ShadowVS";
     static const std::string  DEPTH_PS_STR = "DepthPS";
 
     static const std::wstring FULLSCREEN_VS = L"HLSL/FullScreenVS.hlsl";
@@ -122,12 +126,16 @@ namespace SharedCommons {
     static const std::string  KEY_GPU_DEPTH_ALPHA_NO_CULL = "GPU_DEPTH_ALPHA_NO_CULL";
     static const std::string  KEY_DEPTH_RECORD_SIG = "DepthRecord_SIG";
 
+    static const std::string  KEY_GPU_SHADOW_SOLID_CULL = "GPU_SHADOW_SOLID_CULL";
+    static const std::string  KEY_GPU_SHADOW_ALPHA_NO_CULL = "GPU_SHADOW_ALPHA_NO_CULL";
+
     static const std::string  KEY_HIERARCHICAL_Z_SIG = "HierarchicalZ_SIG";
     static const std::string  KEY_HIERARCHICAL_Z_CS_SIG = "HierarchicalZCS_SIG";
 
     static const std::string  KEY_DEPTH_RENDER_TEXTURE = "DepthRenderTexture";
     static const std::string  KEY_DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
     static const std::string  KEY_HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
+    static const std::string  KEY_SHADOW_MAP_RENDER_TEXTURE = "ShadowMap_Depth";
 
     static const std::string  KEY_TRANS_REVERSE_Z_SIG = "Trans_ReverseZ_SIG";
     static const std::string  KEY_TRANS_REVERSE_Z_PSO = "Trans_ReverseZ";
@@ -137,6 +145,8 @@ namespace SharedCommons {
 
     inline const std::string KEY_DEBUG_AABB_SIG = "DebugAABBSignature";
     inline const std::string KEY_DEBUG_AABB_PSO = "DebugAABBPso";
+    inline const std::string KEY_DEBUG_LINE_SIG = "DebugLineSignature";
+    inline const std::string KEY_DEBUG_LINE_PSO = "DebugLinePso";
 
 } // MAP - KEY
 

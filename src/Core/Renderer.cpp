@@ -1,5 +1,6 @@
 #include "Pch.h"
 #include "Renderer.h"
+#include "RendererDebugger.h"
 #include "RendererState.h"
 // D3D12
 #include "D3D12Device.h"
@@ -35,22 +36,22 @@
 #include <pix3.h>
 
 using namespace DebugHelper;
-using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-Renderer::Renderer()
-    : m_currentFrameParams{} {
+Renderer::Renderer() {
     m_D3D12Device = std::make_unique<D3D12Device>();
     m_CommandQueue = std::make_unique<CommandQueue>();
     m_SwapChain = std::make_unique<D3D12SwapChain>();
     m_SceneRenderTarget = std::make_unique<RenderTarget>();
     m_RendererState = std::make_unique<RendererState>();
+    m_RendererDebugger = std::make_unique<RendererDebugger>();
 
     // 컴포넌트 및 매니저 객체 생성
     m_RenderQueue = std::make_unique<RenderQueue>();
-    m_Camera = std::make_unique<Camera>();
+    m_SceneCamera = std::make_unique<Camera>();
+    m_MasterCamera = std::make_unique<Camera>();
     m_FrustumCuller = std::make_unique<FrustumCuller>();
-	m_HierarchicalZBuilder = std::make_unique<HierarchicalZBuffer>();
+	m_HierarchicalZBuffer = std::make_unique<HierarchicalZBuffer>();
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
@@ -95,23 +96,23 @@ void Renderer::Shutdown() {
         m_CommandQueue->WaitForPreviousFrame();
     }
 
-    // LoadGUIs 역순 해제
-    // (UI 리소스 및 렌더 타겟 참조 해제)
+    // UI 리소스 및 렌더 타겟 참조 해제
     m_ImGuiManager.reset();
 
-    // LoadAssets 역순 해제
+    // LoadAssets 해제
+    m_RendererDebugger->Shutdown();
     m_OcclusionCuller.reset();
-    m_HierarchicalZBuilder.reset();
+    m_HierarchicalZBuffer.reset();
 	m_FrustumCuller.reset();
     m_Sponza.reset();
     m_TextureManager.reset();
     m_PSOManager.reset();
 
-    // LoadSceneRenderTarget 역순 해제
+    // LoadSceneRenderTarget 해제
     m_SceneRenderTarget.reset();
     m_RenderTextureManager.reset();
 
-    // LoadPipeline 역순 해제
+    // LoadPipeline  해제
     m_GPUMonitor.reset();
 
     // 상수 버퍼 해제
@@ -128,39 +129,98 @@ void Renderer::Shutdown() {
     // 기타 컴포넌트 해제
     m_RenderQueue.reset();
     m_DirectionalLight.reset();
-    m_Camera.reset();
+    m_MasterCamera.reset();
+    m_SceneCamera.reset();
+
     // 디바이스 최종 해제
     m_D3D12Device.reset();
 } // Shutdown
 
 bool Renderer::Frame(const FrameParams& frameParams) {
-    m_currentFrameParams = frameParams;
+    m_RendererState->SetCurrentFrameParams(frameParams);
+    bool enteredMasterCamera = false;
 
-    m_Camera->Frame(frameParams.moveForward, frameParams.moveRight, frameParams.moveUp,
-        frameParams.rotationDeltaX, frameParams.rotationDeltaY, frameParams.zoomDelta);
-    m_FrustumCuller->Frame(m_Camera->GetViewMatrix(), m_Camera->GetStandardZProjectionMatrix());
+    if (frameParams.toggleCameraMode) {
+        m_RendererState->SetUseMasterCamera(!m_RendererState->IsUsingMasterCamera());
+
+        if (m_RendererState->IsUsingMasterCamera()) {
+            enteredMasterCamera = true;
+            m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
+            m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
+            m_MasterCamera->SetFov(m_SceneCamera->GetFov());
+            m_MasterCamera->SetAspect(m_SceneCamera->GetAspect());
+            m_MasterCamera->SetNear(m_SceneCamera->GetNear());
+            m_MasterCamera->SetFar(m_SceneCamera->GetFar());
+            m_MasterCamera->Update();
+        }
+    } // if (frameParams.toggleCameraMode)
+
+    if (m_RendererState->IsUsingMasterCamera()) {
+        if (!enteredMasterCamera) {
+            m_MasterCamera->Frame(
+                frameParams.masterMoveForward,
+                frameParams.masterMoveRight,
+                frameParams.masterMoveUp,
+                frameParams.rotationDeltaX,
+                frameParams.rotationDeltaY,
+                frameParams.zoomDelta);
+
+            m_SceneCamera->Frame(
+                frameParams.moveForward,
+                frameParams.moveRight,
+                frameParams.moveUp,
+                frameParams.sceneRotationDeltaX,
+                frameParams.sceneRotationDeltaY,
+                0.0f);
+        }
+    }
+    else {
+        m_SceneCamera->Frame(
+            frameParams.moveForward,
+            frameParams.moveRight,
+            frameParams.moveUp,
+            frameParams.rotationDeltaX,
+            frameParams.rotationDeltaY,
+            frameParams.zoomDelta);
+    } // if - else
+
+    m_FrustumCuller->Frame(m_SceneCamera->GetViewMatrix(), m_SceneCamera->GetStandardZProjectionMatrix());
     m_DirectionalLight->Frame();
     m_GPUMonitor->Frame();
 
     OcclusionCuller::FrameParams occParams;
-    occParams.viewMatrix = m_Camera->GetViewMatrix();
-    occParams.projectionMatrix = m_Camera->GetReverseZProjectionMatrix();
+    occParams.viewMatrix = m_SceneCamera->GetViewMatrix();
+    occParams.projectionMatrix = m_SceneCamera->GetReverseZProjectionMatrix();
     occParams.screenWidth = static_cast<float>(RendererState::ScreenWidth);
     occParams.screenHeight = static_cast<float>(RendererState::ScreenHeight);
     m_OcclusionCuller->Frame(occParams);
 
+    Camera* renderCamera = m_RendererDebugger->GetActiveCamera();
     RendererState::FrameParams stateParams;
-    stateParams.view = m_Camera->GetViewMatrix();
-    stateParams.projection = m_Camera->GetReverseZProjectionMatrix();
-    stateParams.cameraPosition = m_Camera->GetPosition();
-    stateParams.cameraFov = m_Camera->GetFov();
+    stateParams.view = renderCamera->GetViewMatrix();
+    stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
+    stateParams.cameraPosition = renderCamera->GetPosition();
+    stateParams.cameraFov = renderCamera->GetFov();
     stateParams.direction = m_DirectionalLight->GetDirection();
     stateParams.ambient = m_DirectionalLight->GetAmbient();
     stateParams.diffuse = m_DirectionalLight->GetDiffuse();
     stateParams.lookAt = m_DirectionalLight->GetLookAt();
     stateParams.lightViewMatrix = m_DirectionalLight->GetViewMatrix();
     stateParams.lightProjectionMatrix = m_DirectionalLight->GetProjection();
+    stateParams.shadowMapWidth = SharedCommons::SHADOWMAP_WIDTH;
+    stateParams.shadowMapHeight = SharedCommons::SHADOWMAP_HEIGHT;
+    stateParams.shadowBias = SharedCommons::SHADOW_BIAS;
+    stateParams.shadowSpread = SharedCommons::SHADOW_SPREAD;
     m_RendererState->Frame(stateParams);
+
+    RendererState::FrameParams sceneFrameParams = stateParams;
+    sceneFrameParams.view = m_SceneCamera->GetViewMatrix();
+    sceneFrameParams.projection = m_SceneCamera->GetReverseZProjectionMatrix();
+    sceneFrameParams.cameraPosition = m_SceneCamera->GetPosition();
+    sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
+    m_RendererState->FrameScene(sceneFrameParams);
+
+    m_RendererDebugger->Frame();
     
     return Render();
 } // Frame
@@ -170,13 +230,8 @@ bool Renderer::Render() {
 
     PopulateCommandList();
 
-    // 커맨드 리스트 실행 위임
     m_CommandQueue->Execute();
-
-    // 후면 버퍼를 전면 버퍼로 교체
     m_SwapChain->Present(true);
-
-    // 다음 프레임을 위해 동기화 수행
     m_CommandQueue->WaitForPreviousFrame();
 
     return true;
@@ -261,8 +316,18 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
         return false;
     }
 
-    m_Camera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
+    m_SceneCamera->Init(SharedCommons::DEFAULT_FOV, (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
         SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+    m_MasterCamera->Init(SharedCommons::DEFAULT_FOV,
+        (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
+        SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+    m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
+    m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
+    m_MasterCamera->SetFov(m_SceneCamera->GetFov());
+    m_MasterCamera->SetAspect(m_SceneCamera->GetAspect());
+    m_MasterCamera->SetNear(m_SceneCamera->GetNear());
+    m_MasterCamera->SetFar(m_SceneCamera->GetFar());
+    m_MasterCamera->Update();
     m_DirectionalLight->Init();
 
     if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
@@ -312,9 +377,27 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.psoDepthSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoDepthAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoShadowSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoShadowAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
+        return false;
+    }
+
+    RendererDebugger::InitParams debuggerInitParams = {};
+    debuggerInitParams.device = device;
+    debuggerInitParams.rendererState = m_RendererState.get();
+    debuggerInitParams.renderTextureManager = m_RenderTextureManager.get();
+    debuggerInitParams.swapChain = m_SwapChain.get();
+    debuggerInitParams.psoManager = m_PSOManager.get();
+    debuggerInitParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    debuggerInitParams.sceneCamera = m_SceneCamera.get();
+    debuggerInitParams.masterCamera = m_MasterCamera.get();
+    debuggerInitParams.occlusionCuller = m_OcclusionCuller.get();
+    debuggerInitParams.sponza = m_Sponza.get();
+    if (!m_RendererDebugger->Init(debuggerInitParams)) {
+        DebugHelper::DebugPrint("씬 카메라 절두체 버퍼 생성 실패");
         return false;
     }
 
@@ -334,7 +417,7 @@ bool Renderer::LoadAssets(HWND hwnd) {
 	hzInit.device = device;
 	hzInit.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_HIERARCHICAL_Z_SIG);
 	hzInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_HIERARCHICAL_Z_CS_SIG)->GetPSO();
-    if (!m_HierarchicalZBuilder->Init(hzInit)) {
+    if (!m_HierarchicalZBuffer->Init(hzInit)) {
         DebugHelper::DebugPrint("HierarchicalZBuffer 초기화 실패");
         return false;
     }
@@ -376,8 +459,13 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     ));
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Camera GUI",
-        [this]() { m_Camera->OnGUI(); }
+        "Scene Camera GUI",
+        [this]() { m_SceneCamera->OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Master Camera GUI",
+        [this]() { m_MasterCamera->OnGUI(); }
     ));
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
@@ -390,15 +478,15 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     //    [this]() { m_FrustumCuller->OnGUI(); }
     //));
 
-    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Occlusion Culling GUI",
-        [this]() { m_OcclusionCuller->OnGUI(); }
-    ));
+    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+    //    "Occlusion Culling GUI",
+    //    [this]() { m_OcclusionCuller->OnGUI(); }
+    //));
 
-    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-        "Render Textures GUI",
-        [this]() { m_RenderTextureManager->OnGUI(); }
-    ));
+    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+    //    "Render Textures GUI",
+    //    [this]() { m_RenderTextureManager->OnGUI(); }
+    //));
 
     return true;
 } // UpdateGUIs
@@ -413,10 +501,12 @@ void Renderer::PopulateCommandList() {
     m_GPUMonitor->RecordTimestamp(cmdList, 0);
 
     FrustumPass(cmdList);
-
+ 
+    OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
-    OcclusionPass(cmdList);
-    
+    ShadowPass(cmdList);
+    OcclusionPhase2Pass(cmdList);
+
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
     // 오프스크린 타겟(씬 렌더 타겟) 세팅
@@ -426,6 +516,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
+    m_RendererDebugger->DebugSceneCameraFrustum(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
@@ -483,10 +574,27 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     PIXEndEvent(cmdList);
 } // FrustumPass
 
+void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Phase 1");
+
+    auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
+    hizTexture->Transition(cmdList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+    OcclusionCuller::DispatchPhase1Params params = {};
+    params.cmdList = cmdList;
+    params.hasPreviousHiz = m_HierarchicalZBuffer->IshasValidHiz();
+    params.previousHizTextureDescIndex = hizTexture->GetSRVIndex();
+    params.frustumMainCommandsDescIndex = m_FrustumCuller->GetMainVisibleCommandsSRVIndex();
+    params.frustumVaseCommandsDescIndex = m_FrustumCuller->GetVaseVisibleCommandsSRVIndex();
+    params.frustumMainCountDescIndex = m_FrustumCuller->GetMainCounterSRVIndex();
+    params.frustumVaseCountDescIndex = m_FrustumCuller->GetVaseCounterSRVIndex();
+    params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+
+    m_OcclusionCuller->DispatchPhase1(params);
+    PIXEndEvent(cmdList);
+} // OcclusionPhase1Pass
+
 void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
-    // ==========================================
-    // Depth
-    // ==========================================
     PIXBeginEvent(cmdList, PIX_COLOR(0, 0, 255), L"Depth Recording Pass");
     auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
 
@@ -500,137 +608,97 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
-    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetSceneFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
-    submitParams.mainVisibleCommandsBuffer = m_FrustumCuller->GetMainVisibleCommandsBuffer();
-    submitParams.mainCounterBuffer = m_FrustumCuller->GetMainCounterBuffer();
-    submitParams.vaseVisibleCommandsBuffer = m_FrustumCuller->GetVaseVisibleCommandsBuffer();
-    submitParams.vaseCounterBuffer = m_FrustumCuller->GetVaseCounterBuffer();
+    submitParams.shadowMapDescriptorIndex = UINT_MAX;
+    submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
+    submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
+    submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
+    submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
     submitParams.type = Sponza::SubmitIndirectType::Depth;
 
     m_Sponza->SubmitIndirect(submitParams);
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
-
     PIXEndEvent(cmdList);
 
-    // ==========================================
-    // 디버깅
-    // ==========================================
-    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 128, 128), L"Depth Debug Pass");
-    {
-        auto debugDepthTex = m_RenderTextureManager->CreateRenderTexture(
-            "Depth_Debug",
-            depthTexture->GetWidth(),
-            depthTexture->GetHeight(),
-            RenderTexture::RenderTextureType::Normal,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            1
-        ).get();
-        debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        D3D12_CPU_DESCRIPTOR_HANDLE debugRtvHandle = debugDepthTex->GetRTVHandle();
-        cmdList->OMSetRenderTargets(1, &debugRtvHandle, FALSE, nullptr);
-
-        cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
-        cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
-        cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
-        cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
-
-        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar()};
-        cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
-
-        cmdList->SetGraphicsRootDescriptorTable(
-            RendererState::DebugDepthTexIndex,
-            m_sharedDescriptorAllocator->GetGPUHandle(depthTexture->GetSRVIndex()));
-
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        cmdList->DrawInstanced(3, 1, 0, 0);
-
-        debugDepthTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    }
-
-    PIXEndEvent(cmdList);*/
-
-    // ==========================================
-    // Hi-Z 텍스처 빌드 패스 실행
-    // ==========================================
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
     HierarchicalZBuffer::BuildParams hizParams;
     hizParams.cmdList = cmdList;
     hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
     hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
-    m_HierarchicalZBuilder->Build(hizParams);
+    m_HierarchicalZBuffer->Build(hizParams);
     PIXEndEvent(cmdList);
 
-    // ==========================================
-    // Hi-Z 디버깅 (Reverse-Z 선형 변환 패스)
-    // ==========================================
-    /*PIXBeginEvent(cmdList, PIX_COLOR(128, 255, 128), L"Hi-Z Debug Pass");
-    {
-        auto hizTexture = hizParams.hizTexture;
-
-        auto hizDebugTex = m_RenderTextureManager->CreateRenderTexture(
-            "HiZ_Depth_Debug",
-            hizTexture->GetWidth(),
-            hizTexture->GetHeight(),
-            RenderTexture::RenderTextureType::Normal,
-            DXGI_FORMAT_R16G16B16A16_FLOAT,
-            1
-        ).get();
-
-        hizTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
-        D3D12_CPU_DESCRIPTOR_HANDLE hizDebugRtv = hizDebugTex->GetRTVHandle();
-        cmdList->OMSetRenderTargets(1, &hizDebugRtv, FALSE, nullptr);
-
-        D3D12_VIEWPORT hizViewport = { 0.0f, 0.0f, static_cast<float>(hizTexture->GetWidth()), static_cast<float>(hizTexture->GetHeight()), 0.0f, 1.0f };
-        D3D12_RECT hizScissor = { 0, 0, static_cast<LONG>(hizTexture->GetWidth()), static_cast<LONG>(hizTexture->GetHeight()) };
-        cmdList->RSSetViewports(1, &hizViewport);
-        cmdList->RSSetScissorRects(1, &hizScissor);
-
-        cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
-        cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
-
-        struct { float nearPlane; float farPlane; } cameraClip = { m_Camera->GetNear(), m_Camera->GetFar() };
-        cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, &cameraClip, 0);
-
-        cmdList->SetGraphicsRootDescriptorTable(
-            RendererState::DebugDepthTexIndex,
-            m_sharedDescriptorAllocator->GetGPUHandle(hizTexture->GetSRVIndex()));
-
-        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        cmdList->DrawInstanced(3, 1, 0, 0);
-
-        hizDebugTex->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    }
-
-    PIXEndEvent(cmdList);*/
+    //m_RendererDebugger->DebugHiZRenderTextures(cmdList);
 } // DepthPass
 
-void Renderer::OcclusionPass(ID3D12GraphicsCommandList* cmdList) {
-    PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Pass");
+void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"Shadow Map Pass");
+
+    auto shadowTexture = m_RenderTextureManager->GetRenderTexture(
+        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+    if (!shadowTexture) {
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    shadowTexture->ClearDepth(cmdList, 1.0f, 0);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = shadowTexture->GetDSVHandle();
+    cmdList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
+
+    D3D12_VIEWPORT viewport = {};
+    viewport.Width = static_cast<float>(shadowTexture->GetWidth());
+    viewport.Height = static_cast<float>(shadowTexture->GetHeight());
+    viewport.MaxDepth = 1.0f;
+    D3D12_RECT scissor = {
+        0,
+        0,
+        static_cast<LONG>(shadowTexture->GetWidth()),
+        static_cast<LONG>(shadowTexture->GetHeight())
+    };
+    cmdList->RSSetViewports(1, &viewport);
+    cmdList->RSSetScissorRects(1, &scissor);
+
+    Sponza::SubmitIndirectParams submitParams;
+    submitParams.cmdList = cmdList;
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.shadowMapDescriptorIndex = shadowTexture->GetSRVIndex();
+    submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
+    submitParams.mainCounterBuffer = nullptr;
+    submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
+    submitParams.vaseCounterBuffer = nullptr;
+    submitParams.type = Sponza::SubmitIndirectType::Shadow;
+
+    m_Sponza->SubmitIndirect(submitParams);
+    shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    PIXEndEvent(cmdList);
+} // ShadowPass
+
+void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 100, 0), L"Occlusion Culling Phase 2");
 
     auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
 
-    OcclusionCuller::DispatchParams occParams = {};
-    occParams.cmdList = cmdList;
+    OcclusionCuller::DispatchPhase2Params params = {};
+    params.cmdList = cmdList;
 
-    //  Hi-Z 텍스처 SRV
-    occParams.hizTextureDescIndex = hizTexture->GetSRVIndex();
+    params.currentHizTextureDescIndex = hizTexture->GetSRVIndex();
+    params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
 
-    // FrustumCuller가 1차로 걸러낸 결과물들의 SRV
-    occParams.frustumMainCommandsDescIndex = m_FrustumCuller->GetMainVisibleCommandsSRVIndex();
-    occParams.frustumVaseCommandsDescIndex = m_FrustumCuller->GetVaseVisibleCommandsSRVIndex();
-    occParams.frustumMainCountDescIndex = m_FrustumCuller->GetMainCounterSRVIndex();
-    occParams.frustumVaseCountDescIndex = m_FrustumCuller->GetVaseCounterSRVIndex();
-    occParams.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+    if (m_HierarchicalZBuffer->IshasValidHiz())
+    {
+        m_OcclusionCuller->DispatchPhase2(params);
+    }
 
-    // 디스패치 실행
-    m_OcclusionCuller->Dispatch(occParams);
-    m_OcclusionCuller->ReadbackToCPU(cmdList);
+    m_HierarchicalZBuffer->OnHiZ();
+    //m_OcclusionCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
-} // OcclusionPass
+} // OcclusionPhase2Pass
 
 void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     // 스폰자 씬 렌더링
@@ -640,39 +708,39 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     submitParams.cmdList = cmdList;
     submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.shadowMapDescriptorIndex = m_RenderTextureManager->GetRenderTexture(
+        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE)->GetSRVIndex();
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
     submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
     submitParams.type = Sponza::SubmitIndirectType::General;
+
     m_Sponza->SubmitIndirect(submitParams);
 
     PIXEndEvent(cmdList);
 
-    PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Debug AABB Pass");
+    //m_RendererDebugger->DebugBoundingBox(cmdList);
 
-    Sponza::RenderDebugParams debugParams;
-    debugParams.cmdList = cmdList;
-    debugParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
-    debugParams.mainCmdBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
-    debugParams.mainCounter = m_OcclusionCuller->GetFinalMainCounterBuffer();
-    debugParams.vaseCmdBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
-    debugParams.vaseCounter = m_OcclusionCuller->GetFinalVaseCounterBuffer();
-
-    m_Sponza->RenderDebugAABB(debugParams);
-
-    PIXEndEvent(cmdList);
 } // SponzaPass
 
 void Renderer::OnGUI() {
+    const FrameParams& currentFrameParams = m_RendererState->GetCurrentFrameParams();
+    ImGui::Text("Camera Mode: %s", m_RendererState->IsUsingMasterCamera() ? "Master View" : "Scene View");
+    ImGui::Text("F2: Toggle Scene/Master View");
+    ImGui::Text("Scene View: WASD/Z/X + LMB");
+    ImGui::Text("Master View: Arrow/C/V + LMB");
+    ImGui::Text("Master View Scene Camera: WASD/Z/X + RMB");
+    ImGui::Separator();
+
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "[ HARDWARE ]");
-    ImGui::Text("CPU: %s", m_currentFrameParams.cpuName.c_str());
+    ImGui::Text("CPU: %s", currentFrameParams.cpuName.c_str());
     ImGui::Text("GPU: %s", m_GPUMonitor->GetName().c_str());
     ImGui::Separator();
 
     ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "[ METRICS ]");
-    ImGui::Text("FPS: %d (%.2f ms)", m_currentFrameParams.fps, m_currentFrameParams.deltaTime * 1000.0f);
-    ImGui::Text("CPU Usage: %ld %%", m_currentFrameParams.cpuPercentage);
+    ImGui::Text("FPS: %d (%.2f ms)", currentFrameParams.fps, currentFrameParams.deltaTime * 1000.0f);
+    ImGui::Text("CPU Usage: %ld %%", currentFrameParams.cpuPercentage);
 
     float vramUsage = m_GPUMonitor->GetVRAMUsageMB();
     float vramTotal = m_GPUMonitor->GetVRAMTotalMB();

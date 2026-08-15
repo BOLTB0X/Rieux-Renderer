@@ -14,7 +14,7 @@
 #include <algorithm>
 
 HierarchicalZBuffer::HierarchicalZBuffer()
-	: m_device(nullptr), m_rootSignature(nullptr), m_pso(nullptr) {
+	: m_device(nullptr), m_rootSignature(nullptr), m_pso(nullptr), m_hasValidHiz(false) {
 } // HierarchicalZBuffer
 
 HierarchicalZBuffer::~HierarchicalZBuffer() {
@@ -56,15 +56,11 @@ void HierarchicalZBuffer::Build(const BuildParams& params) {
         return;
     }
 
-    // ---------------------------------------------------------------------------------
     // 원본 Depth 복사를 위한 리소스 상태 전환
-    // ---------------------------------------------------------------------------------
     depthTex->Transition(cmdList, D3D12_RESOURCE_STATE_COPY_SOURCE);
     hizTex->Transition(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
 
-    // ---------------------------------------------------------------------------------
     // 원본 Depth -> Hi-Z Mip 0으로 복사
-    // ---------------------------------------------------------------------------------
     D3D12_TEXTURE_COPY_LOCATION dst = {};
     dst.pResource = hizResource;
     dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -77,17 +73,16 @@ void HierarchicalZBuffer::Build(const BuildParams& params) {
 
     cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
 
-    // ---------------------------------------------------------------------------------
-    //  복사 완료 후 상태 전환 (서브리소스별 개별 분기)
-    // ---------------------------------------------------------------------------------
+    // 복사 완료 후 상태 전환
     // 원본 Depth는 다시 뎁스 읽기 상태로 복구
     depthTex->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_READ);
 
-    // Hi-Z 텍스처는 현재 전체가 COPY_DEST 상태이므로, Mip별로 올바른 목적지 상태로 전환합니다.
+    // Hi-Z 텍스처는 현재 전체가 COPY_DEST 상태이므로
+    // Mip별로 올바른 목적지 상태로 전환
     std::vector<CD3DX12_RESOURCE_BARRIER> barriers;
     barriers.reserve(mipLevels);
 
-    // Mip 0: Compute Shader의 입력(SRV)으로 쓰기 위해 NON_PIXEL_SHADER_RESOURCE로 전환
+    // Mip 0:SRV으로 쓰기 위해 NON_PIXEL_SHADER_RESOURCE로 전환
     barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
         hizResource,
         D3D12_RESOURCE_STATE_COPY_DEST,
@@ -95,7 +90,7 @@ void HierarchicalZBuffer::Build(const BuildParams& params) {
         0
     ));
 
-    // Mip 1 ~ N-1: Compute Shader의 출력(UAV)으로 쓰기 위해 UNORDERED_ACCESS로 전환
+    // Mip 1 ~ N-1: UAV으로 쓰기 위해 UNORDERED_ACCESS로 전환
     for (uint32_t i = 1; i < mipLevels; ++i) {
         barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(
             hizResource,
@@ -142,8 +137,8 @@ void HierarchicalZBuffer::Build(const BuildParams& params) {
             );
             cmdList->ResourceBarrier(1, &toSrvBarrier);
         }
-    }
-
+    } // for (uint32_t i = 1; i < mipLevels; ++i)
+    
     // 마지막 밉 SRV 상태 복구
     CD3DX12_RESOURCE_BARRIER finalBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         hizResource,
@@ -154,3 +149,11 @@ void HierarchicalZBuffer::Build(const BuildParams& params) {
     cmdList->ResourceBarrier(1, &finalBarrier);
     hizTex->SetCurrentStateWithoutBarrier(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 } // Build
+
+void HierarchicalZBuffer::OnHiZ() {
+    m_hasValidHiz = true;
+} // HiZOn
+
+bool HierarchicalZBuffer::IshasValidHiz() {
+    return m_hasValidHiz;
+} // IshasValidHiz
