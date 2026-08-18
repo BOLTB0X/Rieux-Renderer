@@ -167,6 +167,10 @@ private:
 
         DebugLineVertex() : position(0.0f, 0.0f, 0.0f), color(0.0f, 0.0f, 0.0f) {
         }
+
+        DebugLineVertex(const DirectX::XMFLOAT3& pos, const DirectX::XMFLOAT3& col)
+            : position(pos), color(col) {
+        }
     }; // DebugLineVertex
 
 private:
