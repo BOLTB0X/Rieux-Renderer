@@ -473,20 +473,20 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
         [this]() { m_Sponza->OnGUI(); }
     ));
 
-    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-    //    "Frustum Culler GUI",
-    //    [this]() { m_FrustumCuller->OnGUI(); }
-    //));
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Frustum Culler GUI",
+        [this]() { m_FrustumCuller->OnGUI(); }
+    ));
 
-    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-    //    "Occlusion Culling GUI",
-    //    [this]() { m_OcclusionCuller->OnGUI(); }
-    //));
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Occlusion Culling GUI",
+        [this]() { m_OcclusionCuller->OnGUI(); }
+    ));
 
-    //m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
-    //    "Render Textures GUI",
-    //    [this]() { m_RenderTextureManager->OnGUI(); }
-    //));
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Render Textures GUI",
+        [this]() { m_RenderTextureManager->OnGUI(); }
+    ));
 
     return true;
 } // UpdateGUIs
@@ -570,6 +570,7 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     cullParams.mainIndirectBuffer = m_Sponza->GetMainIndirectBuffer();
     cullParams.vaseIndirectBuffer = m_Sponza->GetVaseIndirectBuffer();
     m_FrustumCuller->Dispatch(cullParams);
+    m_FrustumCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
 } // FrustumPass
@@ -629,7 +630,7 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     m_HierarchicalZBuffer->Build(hizParams);
     PIXEndEvent(cmdList);
 
-    //m_RendererDebugger->DebugHiZRenderTextures(cmdList);
+    m_RendererDebugger->DebugHiZRenderTextures(cmdList);
 } // DepthPass
 
 void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
@@ -695,7 +696,7 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     }
 
     m_HierarchicalZBuffer->OnHiZ();
-    //m_OcclusionCuller->ReadbackToCPU(cmdList);
+    m_OcclusionCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
 } // OcclusionPhase2Pass
@@ -720,7 +721,7 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 
-    //m_RendererDebugger->DebugBoundingBox(cmdList);
+    m_RendererDebugger->DebugBoundingBox(cmdList);
 
 } // SponzaPass
 
