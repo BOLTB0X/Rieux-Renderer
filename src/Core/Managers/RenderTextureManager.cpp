@@ -5,6 +5,7 @@
 // Utils
 #include "DebugHelper.h"
 #include "SharedCommons.h"
+#include "GPUCommons.h"
 
 using namespace DebugHelper;
 
@@ -87,6 +88,7 @@ bool RenderTextureManager::Init(const InitParams& params) {
     shadowParams.height = static_cast<UINT>(SharedCommons::SHADOWMAP_HEIGHT);
     shadowParams.type = RenderTexture::RenderTextureType::Depth;
     shadowParams.depthClearValue = 1.0f;
+    shadowParams.arraySize = GPUCommons::MAX_CASCADES;
 
     if (!shadowTex->Init(shadowParams)) {
         DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
@@ -140,8 +142,8 @@ void RenderTextureManager::OnGUI() {
     ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Render Textures ]");
     ImGui::Separator();
 
-    std::lock_guard<std::mutex> lock(m_mutex);
 
+    std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& [name, tex] : m_renderTextures) {
         if (!tex || tex->GetType() != RenderTexture::RenderTextureType::Normal) continue;
 

@@ -18,6 +18,9 @@ ConstantBuffer<CameraClip> g_CameraClipCB : register(b0);
 float4 main(PS_IN input) : SV_TARGET
 {
     float depth = g_Tex.SampleLevel(g_Sampler, input.uv, 0);
+    if (g_CameraClipCB.near < 0.0f)
+        return float4(depth, depth, depth, 1.0f);
+
     float linearDepth =
         (g_CameraClipCB.near * g_CameraClipCB.far) / (g_CameraClipCB.near + depth * (g_CameraClipCB.far - g_CameraClipCB.near));
     float debugVal = linearDepth / g_CameraClipCB.far;

@@ -32,6 +32,8 @@ Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{},
     m_psoDepthSolid = nullptr;
     m_psoShadowAlpha = nullptr;
     m_psoShadowSolid = nullptr;
+    m_psoCSMSolid = nullptr;
+    m_psoCSMAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // Sponza
@@ -47,6 +49,8 @@ Sponza::~Sponza() {
     m_psoDepthSolid = nullptr;
     m_psoShadowAlpha = nullptr;
     m_psoShadowSolid = nullptr;
+    m_psoCSMSolid = nullptr;
+    m_psoCSMAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // ~Sponza
@@ -88,6 +92,8 @@ bool Sponza::Init(const InitParams& params) {
 	m_psoDepthAlpha = params.psoDepthAlpha;
     m_psoShadowSolid = params.psoShadowSolid;
     m_psoShadowAlpha = params.psoShadowAlpha;
+    m_psoCSMSolid = params.psoCSMSolid;
+    m_psoCSMAlpha = params.psoCSMAlpha;
     m_psoDebug = params.psoDebug;
     return true;
 } // Init
@@ -107,6 +113,20 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
             m_heapAllocator->GetGPUHandle(params.shadowMapDescriptorIndex));
     }
 
+    if (params.csmShadowMapDescriptorIndex != UINT_MAX) {
+        cmdList->SetGraphicsRootDescriptorTable(
+            RendererState::CSMShadowMapIndex,
+            m_heapAllocator->GetGPUHandle(params.csmShadowMapDescriptorIndex));
+    }
+
+    if ((params.type == SubmitIndirectType::CSMShadow)
+        && params.cascadeIndex != UINT_MAX) {
+        cmdList->SetGraphicsRoot32BitConstant(
+            RendererState::CascadeIndexConstant,
+            params.cascadeIndex,
+            0);
+    }
+
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     ID3D12PipelineState* mainPSO;
@@ -118,6 +138,10 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
     else if (params.type == SubmitIndirectType::Shadow) {
         mainPSO = m_psoShadowSolid;
         sidePSO = m_psoShadowAlpha;
+    }
+    else if (params.type == SubmitIndirectType::CSMShadow) {
+        mainPSO = m_psoCSMSolid;
+        sidePSO = m_psoCSMAlpha;
     }
     else {
         mainPSO = m_psoDepthSolid;

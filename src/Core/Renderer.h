@@ -31,6 +31,7 @@ class RenderTexture;
 class RenderTextureManager;
 class Sponza;
 class RendererDebugger;
+class CascadedShadowMap;
 
 class Renderer {
 public:
@@ -91,13 +92,17 @@ private:
     std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_SceneCamera;
     std::unique_ptr<Camera>                  m_MasterCamera;
-    std::unique_ptr<FrustumCuller>           m_FrustumCuller;
-    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
-    std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;
     std::unique_ptr<GPUMonitor>              m_GPUMonitor;
     std::shared_ptr<TextureManager>          m_TextureManager;
     std::shared_ptr<ImGuiManager>            m_ImGuiManager;
+    // --------------------------------------------------
+    // Techniques 데이터
+    // --------------------------------------------------
+    std::unique_ptr<FrustumCuller>           m_FrustumCuller;
+    std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
+    std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
+    std::unique_ptr<CascadedShadowMap>       m_CascadedShadowMap;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------

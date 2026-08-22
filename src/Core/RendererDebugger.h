@@ -45,6 +45,7 @@ public:
 
     void DebugDepthRenderTextures(ID3D12GraphicsCommandList*, RenderTexture*);
     void DebugHiZRenderTextures(ID3D12GraphicsCommandList*);
+    void DebugCascadedShadowMap(ID3D12GraphicsCommandList*);
     void DebugBoundingBox(ID3D12GraphicsCommandList*);
     void DebugSceneCameraFrustum(ID3D12GraphicsCommandList*);
 

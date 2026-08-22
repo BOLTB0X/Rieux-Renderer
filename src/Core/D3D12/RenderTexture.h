@@ -24,11 +24,12 @@ public:
         DXGI_FORMAT              format;
         RenderTextureType        type;
         float                    depthClearValue;
+        UINT                     arraySize;
 
         InitParams()
             : device(nullptr), rtvAllocator(nullptr), dsvAllocator(nullptr), sharedDescriptorAllocator(nullptr),
             width(0), height(0), mipLevels(1), format(DXGI_FORMAT_R16G16B16A16_FLOAT),
-            type(RenderTextureType::Normal), depthClearValue(0.0f) {
+            type(RenderTextureType::Normal), depthClearValue(0.0f), arraySize(1) {
         }
     }; // InitDefaultParams
 
@@ -49,25 +50,32 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle() const;
     UINT                        GetSRVIndex() const;
+    UINT                        GetSRVIndex(UINT) const;
     UINT                        GetUAVIndex() const;
     UINT                        GetWidth() const;
     UINT                        GetHeight() const;
     UINT                        GetMipLevels() const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetMipSRVGPUHandle(UINT) const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetMipUAVGPUHandle(UINT) const;
+    D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle(UINT) const;
+    UINT                        GetArraySize() const;
 
 private:
-    Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
-    D3D12_CPU_DESCRIPTOR_HANDLE            m_rtvHandle;
-    D3D12_CPU_DESCRIPTOR_HANDLE            m_dsvHandle;
-    UINT                                   m_srvIndex;
-    UINT                                   m_uavIndex;
-    D3D12_RESOURCE_STATES                  m_currentState;
-    RenderTextureType                      m_type;
-    UINT                                   m_width;
-    UINT                                   m_height;
-    std::vector<UINT>                      m_mipSrvIndices;
-    std::vector<UINT>                      m_mipUavIndices;
-    UINT                                   m_mipLevels;
-    DescriptorHeapAllocator*               m_sharedDescriptorAllocator;
+    Microsoft::WRL::ComPtr<ID3D12Resource>   m_resource;
+    D3D12_CPU_DESCRIPTOR_HANDLE              m_rtvHandle;
+    D3D12_CPU_DESCRIPTOR_HANDLE              m_dsvHandle;
+    UINT                                     m_srvIndex;
+    UINT                                     m_uavIndex;
+    D3D12_RESOURCE_STATES                    m_currentState;
+    RenderTextureType                        m_type;
+    UINT                                     m_width;
+    UINT                                     m_height;
+    std::vector<UINT>                        m_mipSrvIndices;
+    std::vector<UINT>                        m_mipUavIndices;
+    UINT                                     m_mipLevels;
+    DescriptorHeapAllocator*                 m_sharedDescriptorAllocator;
+
+    UINT                                     m_arraySize;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_dsvSliceHandles;
+    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_rtvSliceHandles;
 }; // RenderTexture

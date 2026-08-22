@@ -52,11 +52,13 @@ UINT  RendererState::OcclusionFinalVaseCommandsIndex = 18;
 UINT  RendererState::OcclusionFinalMainCountIndex = 19;
 UINT  RendererState::OcclusionFinalVaseCountIndex = 20;
 
-UINT RendererState::OcclusionCulledMainCommandsIndex = 21;
-UINT RendererState::OcclusionCulledVaseCommandsIndex = 22;
-UINT RendererState::OcclusionCulledMainCountIndex = 23;
-UINT RendererState::OcclusionCulledVaseCountIndex = 24;
-UINT RendererState::OcclusionPhaseIndex = 25;
+UINT  RendererState::OcclusionCulledMainCommandsIndex = 21;
+UINT  RendererState::OcclusionCulledVaseCommandsIndex = 22;
+UINT  RendererState::OcclusionCulledMainCountIndex = 23;
+UINT  RendererState::OcclusionCulledVaseCountIndex = 24;
+UINT  RendererState::OcclusionPhaseIndex = 25;
+UINT  RendererState::CascadeIndexConstant = 26;
+UINT  RendererState::CSMShadowMapIndex = 27;
 
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
@@ -99,7 +101,9 @@ RendererState::FrameParams::FrameParams() :
     lightViewMatrix(DirectX::XMMatrixIdentity()),
     lightProjectionMatrix(DirectX::XMMatrixIdentity()),
     shadowMapWidth(0.0f),
-    shadowMapHeight(0.0f), shadowBias(0.0f), shadowSpread(0.0f) {
+    shadowMapHeight(0.0f), shadowBias(0.0f), shadowSpread(0.0f),
+    cascadeSplits(0, 0, 0, 0), cascadeCount(0) {
+    for (UINT i = 0; i < GPUCommons::MAX_CASCADES; ++i) cascadeViewProj[i] = DirectX::XMMatrixIdentity();
 } // FrameParams
 
 bool RendererState::Init(ID3D12Device* device) {
@@ -151,6 +155,11 @@ void RendererState::Frame(const FrameParams& frameParams) {
     lightData.shadowMapHeight = frameParams.shadowMapHeight;
     lightData.shadowBias = frameParams.shadowBias;
     lightData.shadowSpread = frameParams.shadowSpread;
+    lightData.cascadeCount = frameParams.cascadeCount;
+    lightData.cascadeSplits = frameParams.cascadeSplits;
+    for (UINT i = 0; i < lightData.cascadeCount; ++i) {
+        lightData.cascadeViewProj[i] = XMMatrixTranspose(frameParams.cascadeViewProj[i]);
+    }
 
     if (m_mappedFrameCB) {
         memcpy(m_mappedFrameCB, &frameData, sizeof(GPUCommons::FrameCB));

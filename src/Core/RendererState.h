@@ -71,6 +71,9 @@ public: // Screen
     static UINT OcclusionCulledMainCountIndex;
     static UINT OcclusionCulledVaseCountIndex;
 
+    static UINT CascadeIndexConstant;
+    static UINT CSMShadowMapIndex;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 
@@ -135,6 +138,12 @@ public:
         float             shadowMapHeight;
         float             shadowBias;
         float             shadowSpread;
+
+        DirectX::XMMATRIX cascadeViewProj[GPUCommons::MAX_CASCADES];
+
+        DirectX::XMFLOAT4 cascadeSplits;
+
+        UINT              cascadeCount;
 
         FrameParams();
     }; // FrameParams

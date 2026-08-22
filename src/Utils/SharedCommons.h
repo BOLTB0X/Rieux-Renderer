@@ -39,8 +39,11 @@ namespace SharedCommons {
     static constexpr float SHADOW_FAR_Z = 2000.0f;
     static constexpr float SHADOWMAP_WIDTH = 2048;
     static constexpr float SHADOWMAP_HEIGHT = 2048;
-    static constexpr float SHADOW_BIAS = 0.0008f;
+    static constexpr float SHADOW_BIAS = 0.0012f;
     static constexpr float SHADOW_SPREAD = 1.0f;
+    static constexpr UINT  CASCADES_COUNT = 4;
+    static constexpr float SPLIT_LAMBDA = 0.65f;
+
     ///////////////////////////////////////////////////////////////////////////////////////
 
 } // SharedCommons
@@ -96,6 +99,12 @@ namespace SharedCommons {
     inline const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
     inline const std::string DEBUG_AABB_VS_STR ="DebugAABBVS_str";
     inline const std::string DEBUG_COLOR_PS_STR = "DebugColorPS_str";
+
+    inline const std::string KEY_GPU_CSM_SOLID_CULL = "GPU_CSM_SOLID_CULL";
+    inline const std::string KEY_GPU_CSM_ALPHA_NO_CULL = "GPU_CSM_ALPHA_NO_CULL";
+
+    inline const std::wstring CSM_VS = L"HLSL/CascadeShadowVS.hlsl";
+    inline const std::string  CSM_VS_STR = "CSM_VS";
 
 } // HLSL
 
