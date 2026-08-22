@@ -195,6 +195,44 @@ void RendererDebugger::DebugHiZRenderTextures(ID3D12GraphicsCommandList* cmdList
     PIXEndEvent(cmdList);
 } // DebugHiZRenderTextures
 
+void RendererDebugger::DebugCascadedShadowMap(ID3D12GraphicsCommandList* cmdList) {
+    auto shadowTexture = m_renderTextureManager->GetRenderTexture(
+        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+    if (!shadowTexture || shadowTexture->GetArraySize() == 0) return;
+
+    PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"CSM Debug Pass");
+    for (UINT cascade = 0; cascade < shadowTexture->GetArraySize(); ++cascade) {
+        const std::string name = "CSM_Debug_" + std::to_string(cascade);
+        auto debugTexture = m_renderTextureManager->CreateRenderTexture(
+            name, shadowTexture->GetWidth(), shadowTexture->GetHeight(),
+            RenderTexture::RenderTextureType::Normal,
+            DXGI_FORMAT_R16G16B16A16_FLOAT, 1);
+        if (!debugTexture) continue;
+
+        debugTexture->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        auto rtv = debugTexture->GetRTVHandle();
+        cmdList->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+        D3D12_VIEWPORT viewport = { 0.0f, 0.0f,
+            static_cast<float>(shadowTexture->GetWidth()),
+            static_cast<float>(shadowTexture->GetHeight()), 0.0f, 1.0f };
+        D3D12_RECT scissor = { 0, 0,
+            static_cast<LONG>(shadowTexture->GetWidth()),
+            static_cast<LONG>(shadowTexture->GetHeight()) };
+        cmdList->RSSetViewports(1, &viewport);
+        cmdList->RSSetScissorRects(1, &scissor);
+        cmdList->SetGraphicsRootSignature(m_psoManager->GetID3D12RootSignature(SharedCommons::KEY_TRANS_REVERSE_Z_SIG));
+        cmdList->SetPipelineState(m_psoManager->GetPSO(SharedCommons::KEY_TRANS_REVERSE_Z_PSO)->GetPSO());
+        float debugMode[2] = { -1.0f, 1.0f };
+        cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, debugMode, 0);
+        cmdList->SetGraphicsRootDescriptorTable(RendererState::DebugDepthTexIndex,
+            m_sharedDescriptorAllocator->GetGPUHandle(shadowTexture->GetSRVIndex(cascade)));
+        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        cmdList->DrawInstanced(3, 1, 0, 0);
+        debugTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+    PIXEndEvent(cmdList);
+} // DebugCascadedShadowMap
+
 void RendererDebugger::DebugBoundingBox(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Debug AABB Pass");
 

@@ -25,6 +25,7 @@
 #include "FrustumCuller.h"
 #include "HierarchicalZBuffer.h"
 #include "OcclusionCuller.h"
+#include "CascadedShadowMap.h"
 // World
 #include "Sponza.h"
 // Utils
@@ -53,6 +54,8 @@ Renderer::Renderer() {
     m_FrustumCuller = std::make_unique<FrustumCuller>();
 	m_HierarchicalZBuffer = std::make_unique<HierarchicalZBuffer>();
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
+    m_CascadedShadowMap = std::make_unique<CascadedShadowMap>();
+
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -196,6 +199,15 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     m_OcclusionCuller->Frame(occParams);
 
     Camera* renderCamera = m_RendererDebugger->GetActiveCamera();
+
+    CascadedShadowMap::FrameParams csmFrameParams;
+    csmFrameParams.nearZ = renderCamera->GetNear();
+    csmFrameParams.farZ = renderCamera->GetFar();
+    csmFrameParams.fov = renderCamera->GetFov();
+    csmFrameParams.camerViewMatrix = renderCamera->GetViewMatrix();
+    csmFrameParams.lightDir = m_DirectionalLight->GetDirection();
+    m_CascadedShadowMap->Frame(csmFrameParams);
+
     RendererState::FrameParams stateParams;
     stateParams.view = renderCamera->GetViewMatrix();
     stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
@@ -211,6 +223,12 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     stateParams.shadowMapHeight = SharedCommons::SHADOWMAP_HEIGHT;
     stateParams.shadowBias = SharedCommons::SHADOW_BIAS;
     stateParams.shadowSpread = SharedCommons::SHADOW_SPREAD;
+    stateParams.cascadeCount = m_CascadedShadowMap->GetCascadeCount();
+    for (UINT i = 0; i < stateParams.cascadeCount; ++i) {
+        stateParams.cascadeViewProj[i] = m_CascadedShadowMap->GetCascadeViewProj(i);
+    }
+    stateParams.cascadeSplits = m_CascadedShadowMap->GetSplitDistances();
+
     m_RendererState->Frame(stateParams);
 
     RendererState::FrameParams sceneFrameParams = stateParams;
@@ -220,7 +238,7 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
     m_RendererState->FrameScene(sceneFrameParams);
 
-    m_RendererDebugger->Frame();
+    //m_RendererDebugger->Frame();
     
     return Render();
 } // Frame
@@ -321,6 +339,7 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     m_MasterCamera->Init(SharedCommons::DEFAULT_FOV,
         (float)SharedCommons::SCREEN_WIDTH / (float)SharedCommons::SCREEN_HEIGHT,
         SharedCommons::SCREEN_NEAR, SharedCommons::SCREEN_DEPTH);
+
     m_MasterCamera->SetPosition(m_SceneCamera->GetPosition());
     m_MasterCamera->SetRotation(m_SceneCamera->GetRotation());
     m_MasterCamera->SetFov(m_SceneCamera->GetFov());
@@ -328,7 +347,17 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     m_MasterCamera->SetNear(m_SceneCamera->GetNear());
     m_MasterCamera->SetFar(m_SceneCamera->GetFar());
     m_MasterCamera->Update();
+
     m_DirectionalLight->Init();
+
+    CascadedShadowMap::InitParams csmInit;
+    csmInit.cascadeCount = SharedCommons::CASCADES_COUNT;
+    csmInit.shadowMapSize = SharedCommons::SHADOWMAP_WIDTH;
+    csmInit.splitLambda = SharedCommons::SPLIT_LAMBDA;
+    if (!m_CascadedShadowMap->Init(csmInit)) {
+        DebugHelper::DebugPrint("m_CascadedShadowMap 초기화 실패");
+        return false;
+    }
 
     if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
         DebugHelper::DebugPrint("m_RendererState 초기화 실패");
@@ -379,6 +408,8 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.psoDepthAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoShadowSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoShadowAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoCSMSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_CSM_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoCSMAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_CSM_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
@@ -468,7 +499,7 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
         [this]() { m_MasterCamera->OnGUI(); }
     ));
 
-    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+ /*   m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Sponza GUI",
         [this]() { m_Sponza->OnGUI(); }
     ));
@@ -481,7 +512,7 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Occlusion Culling GUI",
         [this]() { m_OcclusionCuller->OnGUI(); }
-    ));
+    )); */
 
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Render Textures GUI",
@@ -505,6 +536,7 @@ void Renderer::PopulateCommandList() {
     OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
     ShadowPass(cmdList);
+    m_RendererDebugger->DebugCascadedShadowMap(cmdList);
     OcclusionPhase2Pass(cmdList);
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
@@ -516,7 +548,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
-    m_RendererDebugger->DebugSceneCameraFrustum(cmdList);
+    //m_RendererDebugger->DebugSceneCameraFrustum(cmdList);
 
     m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
@@ -570,7 +602,7 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     cullParams.mainIndirectBuffer = m_Sponza->GetMainIndirectBuffer();
     cullParams.vaseIndirectBuffer = m_Sponza->GetVaseIndirectBuffer();
     m_FrustumCuller->Dispatch(cullParams);
-    m_FrustumCuller->ReadbackToCPU(cmdList);
+    //m_FrustumCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
 } // FrustumPass
@@ -630,11 +662,11 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     m_HierarchicalZBuffer->Build(hizParams);
     PIXEndEvent(cmdList);
 
-    m_RendererDebugger->DebugHiZRenderTextures(cmdList);
+    //m_RendererDebugger->DebugHiZRenderTextures(cmdList);
 } // DepthPass
 
 void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
-    PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"Shadow Map Pass");
+    PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"Cascaded Shadow Map Pass");
 
     auto shadowTexture = m_RenderTextureManager->GetRenderTexture(
         SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
@@ -644,38 +676,41 @@ void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
     }
 
     shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    shadowTexture->ClearDepth(cmdList, 1.0f, 0);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = shadowTexture->GetDSVHandle();
-    cmdList->OMSetRenderTargets(0, nullptr, FALSE, &dsvHandle);
 
     D3D12_VIEWPORT viewport = {};
     viewport.Width = static_cast<float>(shadowTexture->GetWidth());
     viewport.Height = static_cast<float>(shadowTexture->GetHeight());
     viewport.MaxDepth = 1.0f;
     D3D12_RECT scissor = {
-        0,
-        0,
+        0, 0,
         static_cast<LONG>(shadowTexture->GetWidth()),
         static_cast<LONG>(shadowTexture->GetHeight())
     };
     cmdList->RSSetViewports(1, &viewport);
     cmdList->RSSetScissorRects(1, &scissor);
 
-    Sponza::SubmitIndirectParams submitParams;
-    submitParams.cmdList = cmdList;
-    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
-    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
-    submitParams.shadowMapDescriptorIndex = shadowTexture->GetSRVIndex();
-    submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
-    submitParams.mainCounterBuffer = nullptr;
-    submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
-    submitParams.vaseCounterBuffer = nullptr;
-    submitParams.type = Sponza::SubmitIndirectType::Shadow;
+    const UINT cascadeCount = m_CascadedShadowMap->GetCascadeCount();
+    for (UINT cascade = 0; cascade < cascadeCount; ++cascade) {
+        D3D12_CPU_DESCRIPTOR_HANDLE sliceDsv = shadowTexture->GetDSVHandle(cascade);
+        cmdList->ClearDepthStencilView(sliceDsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        cmdList->OMSetRenderTargets(0, nullptr, FALSE, &sliceDsv);
 
-    m_Sponza->SubmitIndirect(submitParams);
+        Sponza::SubmitIndirectParams submitParams;
+        submitParams.cmdList = cmdList;
+        submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+        submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+        submitParams.cascadeIndex = cascade;
+        submitParams.shadowMapDescriptorIndex = UINT_MAX;
+        submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
+        submitParams.mainCounterBuffer = nullptr;
+        submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
+        submitParams.vaseCounterBuffer = nullptr;
+        submitParams.type = Sponza::SubmitIndirectType::CSMShadow;
+
+        m_Sponza->SubmitIndirect(submitParams);
+    }
+
     shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
     PIXEndEvent(cmdList);
 } // ShadowPass
 
@@ -696,7 +731,7 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     }
 
     m_HierarchicalZBuffer->OnHiZ();
-    m_OcclusionCuller->ReadbackToCPU(cmdList);
+    //m_OcclusionCuller->ReadbackToCPU(cmdList);
 
     PIXEndEvent(cmdList);
 } // OcclusionPhase2Pass
@@ -705,12 +740,16 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     // 스폰자 씬 렌더링
     PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
 
+    auto csmTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+
+
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
     submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
     submitParams.shadowMapDescriptorIndex = m_RenderTextureManager->GetRenderTexture(
         SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE)->GetSRVIndex();
+    submitParams.csmShadowMapDescriptorIndex = csmTexture ? csmTexture->GetSRVIndex() : UINT_MAX;
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
     submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
@@ -721,7 +760,7 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
 
     PIXEndEvent(cmdList);
 
-    m_RendererDebugger->DebugBoundingBox(cmdList);
+    //m_RendererDebugger->DebugBoundingBox(cmdList);
 
 } // SponzaPass
 

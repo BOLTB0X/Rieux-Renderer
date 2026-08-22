@@ -31,6 +31,8 @@ ConstantBuffer<Frame> g_FrameCB : register(b0);
 #define SCREEN_RESOLUTION g_FrameCB.screenResolution
 #define TIME              g_FrameCB.time
 
+#define MAX_CASCADES 4
+
 struct DirectionalLight
 {
     float3 lightDir;
@@ -52,7 +54,10 @@ struct DirectionalLight
     float  shadowBias;
     float  shadowSpread;
     
-    float4 lPadding3;
+    matrix cascadeViewProj[MAX_CASCADES];
+    float4 cascadeSplits;
+    uint   cascadeCount;
+    float3 cPadding;
 }; // DirectionalLight
 
 ConstantBuffer<DirectionalLight> g_DirectionalLightCB : register(b1);
@@ -67,6 +72,10 @@ ConstantBuffer<DirectionalLight> g_DirectionalLightCB : register(b1);
 #define SHADOW_MAP_SIZE   float2(g_DirectionalLightCB.shadowMapWidth, g_DirectionalLightCB.shadowMapHeight)
 #define SHADOW_BIAS       g_DirectionalLightCB.shadowBias
 #define SHADOW_SPREAD     g_DirectionalLightCB.shadowSpread
+
+#define CASCADE_VIEW_PROJ g_DirectionalLightCB.cascadeViewProj
+#define CASCADE_SPLITS    g_DirectionalLightCB.cascadeSplits
+#define CASCADE_COUNT     g_DirectionalLightCB.cascadeCount
 
 #define PI                3.14159265f
 

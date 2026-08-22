@@ -22,7 +22,7 @@ ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
 float4 main(PS_IN input) : SV_TARGET
 {
     MeshInstanceData inst = g_InstanceData[g_InstanceCB.InstanceIndex];
-    
+
     float4 alphaSample = g_Textures[NonUniformResourceIndex(inst.alphaIndex)].Sample(Sampler, input.texcoord);
     if (alphaSample.r < 0.1f)
     {
@@ -34,14 +34,11 @@ float4 main(PS_IN input) : SV_TARGET
 
     float3 normalSample = g_Textures[NonUniformResourceIndex(inst.normalIndex)].Sample(Sampler, input.texcoord).rgb;
     float3 localNormal = normalSample * 2.0f - 1.0f;
-
     float3 N = normalize(input.normalWS);
     float3 T = normalize(input.tangentWS);
     float3 B = normalize(input.binormalWS);
-
     T = normalize(T - dot(T, N) * N);
     B = cross(N, T);
-
     float3 normalWS = normalize(T * localNormal.x + B * localNormal.y + N * localNormal.z);
 
     float3 V = normalize(CAMERA_POSITION - input.positionWS);
@@ -63,7 +60,9 @@ float4 main(PS_IN input) : SV_TARGET
             * inst.roughnessFactor);
     }
 
-    float shadowFactor = Calculate_Shadow(input.positionWS, normalWS);
+    float viewSpaceDepth = mul(float4(input.positionWS, 1.0f), VIEW).z;
+    float shadowFactor = Calculate_CascadeShadow(input.positionWS, normalWS, viewSpaceDepth);
+
     float3 directTerm = Evaluate_Direct_PBR(
         albedoColor.rgb,
         metallic,
@@ -76,6 +75,6 @@ float4 main(PS_IN input) : SV_TARGET
 
     float3 ambientTerm = LIGHT_AMBIENT.rgb * albedoColor.rgb * (1.0f - metallic);
     float3 finalColor = ambientTerm + directTerm;
-
+    
     return float4(finalColor, albedoColor.a);
 } // main

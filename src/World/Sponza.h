@@ -20,13 +20,16 @@ public:
         ID3D12PipelineState* psoDepthAlpha = nullptr;
         ID3D12PipelineState* psoShadowSolid = nullptr;
         ID3D12PipelineState* psoShadowAlpha = nullptr;
+        ID3D12PipelineState* psoCSMSolid = nullptr;
+        ID3D12PipelineState* psoCSMAlpha = nullptr;
         ID3D12PipelineState* psoDebug = nullptr;
     }; // InitDefaultParams
 
     enum class SubmitIndirectType {
         General,
         Depth,
-        Shadow
+        Shadow,
+        CSMShadow
     }; // RenderTextureType
 
     struct SubmitIndirectParams {
@@ -34,7 +37,10 @@ public:
 
 		D3D12_GPU_VIRTUAL_ADDRESS  frameConstantsGPUAddress;
 		D3D12_GPU_VIRTUAL_ADDRESS  lightConstantsGPUAddress;
+
+        UINT                       cascadeIndex;
 		UINT                       shadowMapDescriptorIndex;
+		UINT                       csmShadowMapDescriptorIndex;
 
         ID3D12Resource*            mainVisibleCommandsBuffer;
         ID3D12Resource*            mainCounterBuffer;
@@ -45,7 +51,8 @@ public:
         SubmitIndirectType         type;
 
         SubmitIndirectParams()
-            : cmdList(nullptr), frameConstantsGPUAddress(0), lightConstantsGPUAddress(0), shadowMapDescriptorIndex(UINT_MAX),
+            : cmdList(nullptr), frameConstantsGPUAddress(0), lightConstantsGPUAddress(0), 
+            cascadeIndex(UINT_MAX), shadowMapDescriptorIndex(UINT_MAX), csmShadowMapDescriptorIndex(UINT_MAX),
             mainVisibleCommandsBuffer(nullptr), mainCounterBuffer(nullptr),
             vaseVisibleCommandsBuffer(nullptr), vaseCounterBuffer(nullptr),
             type(SubmitIndirectType::General){
@@ -114,6 +121,8 @@ private:
     ID3D12PipelineState*                           m_psoDepthAlpha;
     ID3D12PipelineState*                           m_psoShadowSolid;
     ID3D12PipelineState*                           m_psoShadowAlpha;
+    ID3D12PipelineState*                           m_psoCSMSolid;
+    ID3D12PipelineState*                           m_psoCSMAlpha;
     ID3D12PipelineState*                           m_psoDebug;
 
     DescriptorHeapAllocator*                       m_heapAllocator;

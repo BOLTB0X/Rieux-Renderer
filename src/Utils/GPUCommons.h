@@ -104,21 +104,11 @@ namespace GPUCommons {
         }
     }; // IndirectCommand
 
-    struct OcclusionCullingCB {
-        DirectX::XMMATRIX viewProj;
-        float             screenWidth;
-        float             screenHeight;
-        uint32_t          mainCapacity;
-        uint32_t          vaseCapacity;
-        DirectX::XMFLOAT2 padding;
-
-        OcclusionCullingCB() : viewProj(DirectX::XMMatrixIdentity())
-            , screenWidth(0.0f), screenHeight(0.0f), mainCapacity(0), vaseCapacity(0), padding(0.0f, 0.0f) {
-        }
-    }; // OcclusionCullingCB
 } // struct
 
 namespace GPUCommons {
+    static const UINT MAX_CASCADES = 4;
+
     __declspec(align(256)) struct MatrixCB {
         DirectX::XMMATRIX world;
         DirectX::XMMATRIX view;
@@ -141,11 +131,16 @@ namespace GPUCommons {
 
     __declspec(align(256)) struct FrameCB {
         DirectX::XMMATRIX view;
+
         DirectX::XMMATRIX projection;
+
         DirectX::XMMATRIX viewInv;
+
         DirectX::XMMATRIX projInv;
+
         DirectX::XMFLOAT3 cameraPosition;
         float             cameraFov;
+
         DirectX::XMFLOAT2 screenResolution;
         float             time;
         float             padding;
@@ -180,7 +175,13 @@ namespace GPUCommons {
         float             shadowMapHeight;
         float             shadowBias;
         float             shadowSpread;
-        DirectX::XMFLOAT4 padding3;
+
+        DirectX::XMMATRIX cascadeViewProj[MAX_CASCADES];
+
+        DirectX::XMFLOAT4 cascadeSplits;
+
+        UINT              cascadeCount;
+        DirectX::XMFLOAT3 padding3;
 
         DirectionalLightCB() :
             direction(0.0f, -1.0f, 0.0f), padding1(0.0f),
@@ -189,9 +190,9 @@ namespace GPUCommons {
             lookAt(0.0f, 0.0f, 0.0f), padding2(0.0f),
             lightViewMatrix(DirectX::XMMatrixIdentity()),
             lightProjectionMatrix(DirectX::XMMatrixIdentity()),
-            shadowMapWidth(0.0f),
-            shadowMapHeight(0.0f), shadowBias(0.0f), shadowSpread(0.0f),
-            padding3(0.0f, 0.0f, 0.0f, 0.0f) {
+            shadowMapWidth(0.0f), shadowMapHeight(0.0f), shadowBias(0.0f), shadowSpread(0.0f),
+            cascadeSplits(0, 0, 0, 0), cascadeCount(0), padding3(0.0f, 0.0f, 0.0f) {
+            for (UINT i = 0; i < MAX_CASCADES; ++i) cascadeViewProj[i] = DirectX::XMMatrixIdentity();
         }
     }; // DirectionalLightCB
 
@@ -200,4 +201,17 @@ namespace GPUCommons {
         UINT              totalInstances;
         DirectX::XMFLOAT3 padding;
     }; // FrustumCullingCB
+
+    __declspec(align(256)) struct OcclusionCullingCB {
+        DirectX::XMMATRIX viewProj;
+        float             screenWidth;
+        float             screenHeight;
+        uint32_t          mainCapacity;
+        uint32_t          vaseCapacity;
+        DirectX::XMFLOAT2 padding;
+
+        OcclusionCullingCB() : viewProj(DirectX::XMMatrixIdentity())
+            , screenWidth(0.0f), screenHeight(0.0f), mainCapacity(0), vaseCapacity(0), padding(0.0f, 0.0f) {
+        }
+    }; // OcclusionCullingCB
 } // CBs
