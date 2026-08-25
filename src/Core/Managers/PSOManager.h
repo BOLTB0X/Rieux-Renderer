@@ -47,6 +47,7 @@ private:
 	bool BuildShadowRecord(const std::string&);
     bool BuildCascadedShadowRecord(const std::string&);
 	bool BuildHierarchicalZ(const std::string&);
+    bool BuildProbeCapture(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);

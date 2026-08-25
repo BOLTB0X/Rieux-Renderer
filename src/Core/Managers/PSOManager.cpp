@@ -59,6 +59,11 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
+    if (!BuildProbeCapture(SharedCommons::KEY_GPU_SPONZA_SIG)) { // 추가
+        DebugHelper::DebugPrint("Probe Capture PSO 빌드 실패");
+        return false;
+    }
+
     if (!BuildDebugTransReverseZ(SharedCommons::KEY_TRANS_REVERSE_Z_SIG)) {
         DebugHelper::DebugPrint("TransReverseZ Z PSO 빌드 실패");
         return false;
@@ -584,6 +589,48 @@ bool PSOManager::BuildHierarchicalZ(const std::string& signatureKey) {
     m_psoMap[SharedCommons::KEY_HIERARCHICAL_Z_CS_SIG] = std::move(pso);
     return true;
 } // BuildHierarchicalZ
+
+bool PSOManager::BuildProbeCapture(const std::string& signatureKey) {
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (ProbeCapture PSO): " + signatureKey);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> vsBlob;
+    ComPtr<IDxcBlob> psBlob;
+
+    if (!ShaderHelper::InitVertexShader(SharedCommons::GPU_PBR_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::PROBE_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::PROBE_PS_STR] = psBlob;
+
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { nullptr, 0 };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    baseParams.depthStencilState.DepthEnable = TRUE;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+
+    bool result = true;
+    result &= BuildSolidCullBack(SharedCommons::KEY_GPU_PROBE_SOLID_CULL, baseParams);
+    result &= BuildSolidCullNone(SharedCommons::KEY_GPU_PROBE_ALPHA_NO_CULL, baseParams);
+
+    if (!result) {
+        DebugHelper::DebugPrint("GPU ProbeCapture PSO 변형 초기화 실패");
+    }
+
+    return result;
+} // BuildProbeCapture
 
 bool PSOManager::BuildDebugTransReverseZ(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](D3D12RootSignature::Builder& b) {

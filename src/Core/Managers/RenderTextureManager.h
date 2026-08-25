@@ -17,7 +17,8 @@ public:
         UINT                     rtvCapacity;
         UINT                     dsvCapacity;
 
-        InitParams() : device(nullptr), sharedDescriptorAllocator(nullptr), rtvCapacity(64), dsvCapacity(16) {
+        InitParams() : device(nullptr), sharedDescriptorAllocator(nullptr),
+            rtvCapacity(64), dsvCapacity(16) {
         }
     }; // InitDefaultParams
 
@@ -32,7 +33,8 @@ public:
 
 public:
     std::shared_ptr<RenderTexture> CreateRenderTexture(const std::string&, UINT, UINT,
-        RenderTexture::RenderTextureType type, DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT, UINT mipLevels = 1);
+        RenderTexture::RenderTextureType type, DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+        UINT mipLevels = 1, UINT arraySize = 1, bool isCubeMap = false);
     std::shared_ptr<RenderTexture> GetRenderTexture(const std::string&) const;
 
 private:

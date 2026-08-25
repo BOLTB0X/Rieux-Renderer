@@ -30,10 +30,10 @@ Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{},
     m_psoWireNoCull = nullptr;
     m_psoDepthAlpha = nullptr;
     m_psoDepthSolid = nullptr;
-    m_psoShadowAlpha = nullptr;
-    m_psoShadowSolid = nullptr;
     m_psoCSMSolid = nullptr;
     m_psoCSMAlpha = nullptr;
+    m_psoProbeSolid = nullptr;
+    m_psoProbeAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // Sponza
@@ -47,10 +47,10 @@ Sponza::~Sponza() {
     m_psoWireNoCull = nullptr;
     m_psoDepthAlpha = nullptr;
     m_psoDepthSolid = nullptr;
-    m_psoShadowAlpha = nullptr;
-    m_psoShadowSolid = nullptr;
     m_psoCSMSolid = nullptr;
     m_psoCSMAlpha = nullptr;
+    m_psoProbeSolid = nullptr;
+    m_psoProbeAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // ~Sponza
@@ -90,10 +90,10 @@ bool Sponza::Init(const InitParams& params) {
     m_psoWireNoCull = params.psoWireNoCull;
 	m_psoDepthSolid = params.psoDepthSolid;
 	m_psoDepthAlpha = params.psoDepthAlpha;
-    m_psoShadowSolid = params.psoShadowSolid;
-    m_psoShadowAlpha = params.psoShadowAlpha;
     m_psoCSMSolid = params.psoCSMSolid;
     m_psoCSMAlpha = params.psoCSMAlpha;
+    m_psoProbeSolid = params.psoProbeSolid;
+    m_psoProbeAlpha = params.psoProbeAlpha;
     m_psoDebug = params.psoDebug;
     return true;
 } // Init
@@ -135,13 +135,13 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
         mainPSO = m_enableWireframe ? m_psoWireCull : m_psoSolidCull;
         sidePSO = m_enableWireframe ? m_psoWireNoCull : m_psoSolidNoCull;
     }
-    else if (params.type == SubmitIndirectType::Shadow) {
-        mainPSO = m_psoShadowSolid;
-        sidePSO = m_psoShadowAlpha;
-    }
     else if (params.type == SubmitIndirectType::CSMShadow) {
         mainPSO = m_psoCSMSolid;
         sidePSO = m_psoCSMAlpha;
+    }
+    else if (params.type == SubmitIndirectType::ProbeCapture) {
+        mainPSO = m_psoProbeSolid;
+        sidePSO = m_psoProbeAlpha;
     }
     else {
         mainPSO = m_psoDepthSolid;
@@ -190,7 +190,6 @@ void Sponza::RenderDebugAABB(const RenderDebugParams& params) {
     // RootConstants 중 두 번째(Offset 1) 값만 덮어씀
     cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugInstanceIndex, 1, &passTypeAll, 1);
 
-    // 원본 버퍼는 Counter가 없으므로 Max 카운트만큼 전부 그림
     if (m_mainIndirectBuffer.Get()) {
         cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_mainIndirectCount, m_mainIndirectBuffer.Get(), 0, nullptr, 0);
     }
@@ -198,7 +197,6 @@ void Sponza::RenderDebugAABB(const RenderDebugParams& params) {
         cmdList->ExecuteIndirect(m_debugCommandSignature.Get(), m_vaseIndirectCount, m_vaseIndirectBuffer.Get(), 0, nullptr, 0);
     }
 
-    // 컬링 통과한 버퍼를 그 위에 초록/노란색으로 덧그리기
     uint32_t passTypeVisible = 1; // 1: Green/Yellow
     cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugInstanceIndex, 1, &passTypeVisible, 1);
 

@@ -88,10 +88,14 @@ void GPUMonitor::RecordTimestamp(ID3D12GraphicsCommandList* commandList, uint32_
     }
 } // RecordTimestamp
 
-void GPUMonitor::ResolveQueryData(ID3D12GraphicsCommandList* commandList) {
+void GPUMonitor::ResolveQueryData(ID3D12GraphicsCommandList* commandList, uint32_t queryCount) {
     if (m_queryHeap && m_queryResultBuffer) {
-        // 기록된 모든 쿼리 데이터를 리드백 버퍼로 복사
-        commandList->ResolveQueryData(m_queryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 2, m_queryResultBuffer.Get(), 0);
+        if (queryCount == 0 || queryCount > m_maxQueries) {
+            queryCount = m_maxQueries;
+        }
+        commandList->ResolveQueryData(
+            m_queryHeap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, queryCount,
+            m_queryResultBuffer.Get(), 0);
     }
 } // ResolveQueryData
 

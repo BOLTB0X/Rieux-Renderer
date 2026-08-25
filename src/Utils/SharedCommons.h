@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <wrl/client.h>
 
 namespace SharedCommons {
     /////////////////////////////////////////
@@ -106,6 +107,11 @@ namespace SharedCommons {
     inline const std::wstring CSM_VS = L"HLSL/CascadeShadowVS.hlsl";
     inline const std::string  CSM_VS_STR = "CSM_VS";
 
+    inline const std::string KEY_GPU_PROBE_SOLID_CULL = "GPU_PROBE_SOLID_CULL";
+    inline const std::string KEY_GPU_PROBE_ALPHA_NO_CULL = "GPU_PROBE_ALPHA_NO_CULL";
+
+    inline const std::wstring PROBE_PS = L"HLSL/GPU_ProbeCapturePS.hlsl";
+    inline const std::string  PROBE_PS_STR = "PROBE_PS";
 } // HLSL
 
 namespace SharedCommons {
