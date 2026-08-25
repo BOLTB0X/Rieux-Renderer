@@ -10,7 +10,8 @@ using namespace DebugHelper;
 RenderTexture::RenderTexture()
     : m_rtvHandle{}, m_dsvHandle{}, m_srvIndex(UINT_MAX), m_uavIndex(UINT_MAX),
     m_currentState(D3D12_RESOURCE_STATE_COMMON), m_type(RenderTextureType::Normal),
-    m_width(0), m_height(0), m_mipLevels(1), m_sharedDescriptorAllocator(nullptr), m_arraySize(1) {
+    m_width(0), m_height(0), m_mipLevels(1), m_sharedDescriptorAllocator(nullptr),
+    m_arraySize(1), m_isCubeMap(false) {
 } // RenderTexture
 
 RenderTexture::~RenderTexture() {
@@ -76,7 +77,7 @@ bool RenderTexture::Init(const InitParams& params) {
 
         if (m_arraySize > 1) {
             // ----------------------------------------
-            // 배열 Depth - 슬라이스별 DSV 생성
+            // 배열 Depth
             // ----------------------------------------
             m_dsvSliceHandles.resize(m_arraySize);
             for (UINT slice = 0; slice < m_arraySize; ++slice) {
@@ -91,10 +92,8 @@ bool RenderTexture::Init(const InitParams& params) {
                 m_dsvSliceHandles[slice] = params.dsvAllocator->GetCPUHandle(dsvIndex);
                 params.device->CreateDepthStencilView(m_resource.Get(), &sliceDsvDesc, m_dsvSliceHandles[slice]);
             }
-            // 단일 핸들 접근(GetDSVHandle())도 깨지지 않도록 0번 슬라이스로 채워둠
             m_dsvHandle = m_dsvSliceHandles[0];
 
-            // SRV: 전체 슬라이스를 한 번에 바인딩하는 Texture2DArray
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = DXGI_FORMAT_R32_FLOAT;
             srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -107,7 +106,8 @@ bool RenderTexture::Init(const InitParams& params) {
             m_srvIndex = params.sharedDescriptorAllocator->Allocate();
             params.device->CreateShaderResourceView(m_resource.Get(), &srvDesc, params.sharedDescriptorAllocator->GetCPUHandle(m_srvIndex));
 
-            m_mipSrvIndices.resize(m_arraySize);
+            // 슬라이스별 단일 SRV
+            m_sliceSrvIndices.resize(m_arraySize);
             for (UINT slice = 0; slice < m_arraySize; ++slice) {
                 D3D12_SHADER_RESOURCE_VIEW_DESC sliceSrvDesc = {};
                 sliceSrvDesc.Format = DXGI_FORMAT_R32_FLOAT;
@@ -116,11 +116,11 @@ bool RenderTexture::Init(const InitParams& params) {
                 sliceSrvDesc.Texture2DArray.MipLevels = m_mipLevels;
                 sliceSrvDesc.Texture2DArray.FirstArraySlice = slice;
                 sliceSrvDesc.Texture2DArray.ArraySize = 1;
-                m_mipSrvIndices[slice] = params.sharedDescriptorAllocator->Allocate();
+                m_sliceSrvIndices[slice] = params.sharedDescriptorAllocator->Allocate();
                 params.device->CreateShaderResourceView(m_resource.Get(), &sliceSrvDesc,
-                    params.sharedDescriptorAllocator->GetCPUHandle(m_mipSrvIndices[slice]));
+                    params.sharedDescriptorAllocator->GetCPUHandle(m_sliceSrvIndices[slice]));
             }
-        }
+        } // if (m_arraySize > 1)
         else {
             // ----------------------------------------
             // 단일 Depth
@@ -171,15 +171,40 @@ bool RenderTexture::Init(const InitParams& params) {
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = params.format;
             srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-            srvDesc.Texture2DArray.MostDetailedMip = 0;
-            srvDesc.Texture2DArray.MipLevels = m_mipLevels;
-            srvDesc.Texture2DArray.FirstArraySlice = 0;
-            srvDesc.Texture2DArray.ArraySize = m_arraySize;
+
+            if (m_isCubeMap) {
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+                srvDesc.TextureCube.MostDetailedMip = 0;
+                srvDesc.TextureCube.MipLevels = m_mipLevels;
+                srvDesc.TextureCube.ResourceMinLODClamp = 0.0f;
+            }
+            else {
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                srvDesc.Texture2DArray.MostDetailedMip = 0;
+                srvDesc.Texture2DArray.MipLevels = m_mipLevels;
+                srvDesc.Texture2DArray.FirstArraySlice = 0;
+                srvDesc.Texture2DArray.ArraySize = m_arraySize;
+            }
 
             m_srvIndex = params.sharedDescriptorAllocator->Allocate();
             params.device->CreateShaderResourceView(m_resource.Get(), &srvDesc, params.sharedDescriptorAllocator->GetCPUHandle(m_srvIndex));
-        }
+
+            m_sliceSrvIndices.resize(m_arraySize);
+            for (UINT slice = 0; slice < m_arraySize; ++slice) {
+                D3D12_SHADER_RESOURCE_VIEW_DESC sliceSrvDesc = {};
+                sliceSrvDesc.Format = params.format;
+                sliceSrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                sliceSrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                sliceSrvDesc.Texture2DArray.MostDetailedMip = 0;
+                sliceSrvDesc.Texture2DArray.MipLevels = m_mipLevels;
+                sliceSrvDesc.Texture2DArray.FirstArraySlice = slice;
+                sliceSrvDesc.Texture2DArray.ArraySize = 1;
+
+                m_sliceSrvIndices[slice] = params.sharedDescriptorAllocator->Allocate();
+                params.device->CreateShaderResourceView(m_resource.Get(), &sliceSrvDesc,
+                    params.sharedDescriptorAllocator->GetCPUHandle(m_sliceSrvIndices[slice]));
+            }
+        } // if (m_arraySize > 1)
         else {
             // ----------------------------------------
             // 단일 RTV/UAV
@@ -260,15 +285,14 @@ RenderTexture::RenderTextureType RenderTexture::GetType() const { return m_type;
 ID3D12Resource*                  RenderTexture::GetResource() const { return m_resource.Get(); } // GetResource
 D3D12_CPU_DESCRIPTOR_HANDLE      RenderTexture::GetRTVHandle() const { return m_rtvHandle; } // GetRTVHandle
 D3D12_CPU_DESCRIPTOR_HANDLE      RenderTexture::GetDSVHandle() const { return m_dsvHandle; } // GetDSVHandle
-UINT                             RenderTexture::GetSRVIndex() const { return m_srvIndex; } // GetSRVIndex
-UINT                             RenderTexture::GetSRVIndex(UINT slice) const {
-    return slice < m_mipSrvIndices.size() ? m_mipSrvIndices[slice] : UINT_MAX;
-} // GetSRVIndex
+UINT                             RenderTexture::GetSRVIndex() const { return m_srvIndex; } // GetSliceSRVIndex
+UINT                             RenderTexture::GetSliceSRVIndex(UINT slice) const { return slice < m_mipSrvIndices.size() ? m_mipSrvIndices[slice] : UINT_MAX; } // GetSliceSRVIndex
 UINT                             RenderTexture::GetUAVIndex() const { return m_uavIndex; } // GetUAVIndex
 UINT                             RenderTexture::GetWidth() const { return m_width; } // GetWidth
 UINT                             RenderTexture::GetHeight() const { return m_height; } // GetHeight
 UINT                             RenderTexture::GetMipLevels() const { return m_mipLevels; } // GetMipLevels
 UINT                             RenderTexture::GetArraySize() const { return m_arraySize; } // GetArraySize
+bool                             RenderTexture::IsCubeMap() const { return m_isCubeMap; }
 
 D3D12_GPU_DESCRIPTOR_HANDLE RenderTexture::GetMipSRVGPUHandle(UINT mip) const {
     if (!m_sharedDescriptorAllocator || mip >= m_mipSrvIndices.size()) return { 0 };
@@ -286,3 +310,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE RenderTexture::GetDSVHandle(UINT slice) const {
     }
     return m_dsvHandle;
 } // GetDSVHandle
+
+D3D12_CPU_DESCRIPTOR_HANDLE RenderTexture::GetRTVHandle(UINT slice) const {
+    if (slice < m_rtvSliceHandles.size()) {
+        return m_rtvSliceHandles[slice];
+    }
+    return m_rtvHandle;
+} // GetRTVHandle

@@ -8,9 +8,9 @@ public:
     static const UINT MAX_CASCADES = 4;
 
     struct InitParams {
-        UINT cascadeCount;   // 보통 4
-        UINT shadowMapSize;  // 텍셀 스냅 계산용 (예: 2048)
-        float splitLambda;   // log/uniform 블렌드 비율 (0.5 권장)
+        UINT cascadeCount;
+        UINT shadowMapSize;
+        float splitLambda;
 
         InitParams() : cascadeCount(4), shadowMapSize(2048), splitLambda(0.5f) {
         }
@@ -41,6 +41,8 @@ public:
 
 public:
     UINT                      GetCascadeCount() const;
+    DirectX::XMMATRIX         GetCascadeView(UINT) const;
+    DirectX::XMMATRIX         GetCascadeProj(UINT) const;
     DirectX::XMMATRIX         GetCascadeViewProj(UINT) const;
     const DirectX::XMFLOAT4&  GetSplitDistances() const;
 
@@ -58,9 +60,11 @@ private:
 
 private:
     float                                       m_splitLambda;
-    std::array<float, MAX_CASCADES + 1>         m_splitDepths;       // 뷰공간 거리 (N+1개 경계)
+    std::array<float, MAX_CASCADES + 1>         m_splitDepths;
     std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeViewProj;
-    DirectX::XMFLOAT4                           m_splitDistancesOut; // 셰이더로 넘길 4개 값
+    std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeView;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeProj;
+    DirectX::XMFLOAT4                           m_splitDistancesOut;
     UINT                                        m_cascadeCount;
     UINT                                        m_shadowMapSize;
 }; // CascadedShadowMap

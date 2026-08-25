@@ -7,37 +7,35 @@ using namespace DirectX;
 Frustum::Frustum()
 	: m_screenDepth(0.0f) {
 	m_planes[0][0] = 0.0f;
+	m_isOrthographic = false;
 } // Frustum
 
 Frustum::~Frustum() {
 } // ~Frustum
 
-void Frustum::Init(float screenDepth) {
+void Frustum::Init(float screenDepth, bool isOrthographic) {
 	m_screenDepth = screenDepth;
+	m_isOrthographic = isOrthographic;
 	return;
 } // Init
 
 void Frustum::Frame(XMMATRIX viewMatrix, XMMATRIX projectionMatrix) {
-	XMFLOAT4X4 pMatrix, matrix;
-	float zMinimum, r, length;
+	XMFLOAT4X4 matrix;
 	XMMATRIX finalMatrix;
+	float length;
 
-	// 투영 행렬을 4x4 부동 소수점 형식으로 변환
-	XMStoreFloat4x4(&pMatrix, projectionMatrix);
+	if (!m_isOrthographic) {
+		XMFLOAT4X4 pMatrix;
+		XMStoreFloat4x4(&pMatrix, projectionMatrix);
 
-	// 원뿔대에서 최소 Z 거리를 계산
-	zMinimum = -pMatrix._43 / pMatrix._33;
-	r = m_screenDepth / (m_screenDepth - zMinimum);
+		float zMinimum = -pMatrix._43 / pMatrix._33;
+		float r = m_screenDepth / (m_screenDepth - zMinimum);
 
-	// 업데이트된 값을 투영 행렬에 다시 로드
-	pMatrix._33 = r;
-	pMatrix._43 = -r * zMinimum;
-	projectionMatrix = XMLoadFloat4x4(&pMatrix);
-
-	// 뷰 행렬과 업데이트된 투영 행렬로부터 절두체 행렬을 생성
+		pMatrix._33 = r;
+		pMatrix._43 = -r * zMinimum;
+		projectionMatrix = XMLoadFloat4x4(&pMatrix);
+	}
 	finalMatrix = XMMatrixMultiply(viewMatrix, projectionMatrix);
-
-	// 최종 행렬을 4x4 부동소수점 형식으로 변환
 	XMStoreFloat4x4(&matrix, finalMatrix);
 
 	// 평면 근처를 계산

@@ -18,10 +18,10 @@ public:
         ID3D12PipelineState* psoWireNoCull = nullptr;
         ID3D12PipelineState* psoDepthSolid = nullptr;
         ID3D12PipelineState* psoDepthAlpha = nullptr;
-        ID3D12PipelineState* psoShadowSolid = nullptr;
-        ID3D12PipelineState* psoShadowAlpha = nullptr;
         ID3D12PipelineState* psoCSMSolid = nullptr;
         ID3D12PipelineState* psoCSMAlpha = nullptr;
+        ID3D12PipelineState* psoProbeSolid = nullptr;
+        ID3D12PipelineState* psoProbeAlpha = nullptr;
         ID3D12PipelineState* psoDebug = nullptr;
     }; // InitDefaultParams
 
@@ -29,7 +29,8 @@ public:
         General,
         Depth,
         Shadow,
-        CSMShadow
+        CSMShadow,
+        ProbeCapture
     }; // RenderTextureType
 
     struct SubmitIndirectParams {
@@ -119,10 +120,10 @@ private:
     ID3D12PipelineState*                           m_psoWireNoCull;
     ID3D12PipelineState*                           m_psoDepthSolid;
     ID3D12PipelineState*                           m_psoDepthAlpha;
-    ID3D12PipelineState*                           m_psoShadowSolid;
-    ID3D12PipelineState*                           m_psoShadowAlpha;
     ID3D12PipelineState*                           m_psoCSMSolid;
     ID3D12PipelineState*                           m_psoCSMAlpha;
+    ID3D12PipelineState*                           m_psoProbeSolid;
+    ID3D12PipelineState*                           m_psoProbeAlpha;
     ID3D12PipelineState*                           m_psoDebug;
 
     DescriptorHeapAllocator*                       m_heapAllocator;

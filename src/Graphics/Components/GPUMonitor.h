@@ -28,7 +28,7 @@ public:
     void Frame();
 
     void RecordTimestamp(ID3D12GraphicsCommandList*, uint32_t);
-    void ResolveQueryData(ID3D12GraphicsCommandList*);
+    void ResolveQueryData(ID3D12GraphicsCommandList*, uint32_t queryCount = 0);
 
     const std::string& GetName() const;
     float              GetVRAMUsageMB() const;
