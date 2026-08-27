@@ -118,4 +118,5 @@ private:
     UINT                                               m_cachedVaseVisibleCounts[MAX_CASCADES];
 
     DescriptorHeapAllocator*                           m_heapAllocator;
+    bool                                               m_hasValidVisibleBuffers;
 }; // ShadowFrustumCuller

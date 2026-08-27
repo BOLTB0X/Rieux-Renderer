@@ -693,7 +693,7 @@ bool PSOManager::BuildProbeCapture(const std::string& signatureKey) {
     baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     baseParams.depthStencilState.DepthEnable = TRUE;
     baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
 
     bool result = true;
     result &= BuildSolidCullBack(SharedCommons::KEY_GPU_PROBE_SOLID_CULL, baseParams);

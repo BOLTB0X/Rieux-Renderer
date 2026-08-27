@@ -237,23 +237,12 @@ void OcclusionCuller::ReadbackToCPU(ID3D12GraphicsCommandList* cmdList) {
     if (SUCCEEDED(m_mainReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedMainCount)))) {
         UINT finalMainCount = *mappedMainCount;
         m_mainReadbackBuffer->Unmap(0, nullptr);
-
-        //// 디버그 로그 출력
-        //spdlog::debug("[OcclusionCuller] Final Main Count: {} / Max: {}", finalMainCount, m_maxMainCount);
-
-        //// 오버플로우 발생 여부 검사
-        //bool isValid = (finalMainCount <= m_maxMainCount);
-        //DebugHelper::SuccessCheck(isValid, "Main Buffer Capacity Overflow Detected!");
     }
 
     if (SUCCEEDED(m_vaseReadbackBuffer->Map(0, nullptr, reinterpret_cast<void**>(&mappedVaseCount)))) {
         UINT finalVaseCount = *mappedVaseCount;
         m_vaseReadbackBuffer->Unmap(0, nullptr);
 
-        /*spdlog::debug("[OcclusionCuller] Final Vase Count: {} / Max: {}", finalVaseCount, m_maxVaseCount);
-
-        bool isValid = (finalVaseCount <= m_maxVaseCount);
-        DebugHelper::SuccessCheck(isValid, "Vase Buffer Capacity Overflow Detected!");*/
     }
 } // ReadbackToCPU
 
@@ -272,12 +261,12 @@ void OcclusionCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount, D
     CD3DX12_RESOURCE_DESC visibleDesc = CD3DX12_RESOURCE_DESC::Buffer(
         commandStructSize * maxCount, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &visibleDesc,
-        initialState, nullptr, IID_PPV_ARGS(&outVisibleBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outVisibleBuf));
 
     CD3DX12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
         sizeof(UINT), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
-        initialState, nullptr, IID_PPV_ARGS(&outCounterBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outCounterBuf));
 
     outVisibleDescIdx = m_heapAllocator->Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDescView = {};
@@ -337,7 +326,7 @@ void OcclusionCuller::BuildBuffers(ID3D12Device* device) {
     auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
     auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr, IID_PPV_ARGS(&m_dummyUAVBuffer));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&m_dummyUAVBuffer));
 
     m_dummyUAVDescIndex = m_heapAllocator->Allocate();
 

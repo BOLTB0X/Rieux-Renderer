@@ -1,17 +1,19 @@
 // PrefilterEnvironmentCS.hlsl
-#include "Commons.hlsli"
+#define PI                3.14159265f
+
+struct PrefilterCB
+{
+    float Roughness;
+    uint FaceIndex;
+    uint OutputSize;
+    uint SampleCount;
+}; // PrefilterCB
 
 TextureCube<float4>      g_SourceCubemap : register(t0);
 SamplerState             g_LinearSampler : register(s0);
-RWTexture2DArray<float4> g_OutputMipFace : register(u0); // 디스패치마다 특정 (mip,face) 슬라이스 하나
+RWTexture2DArray<float4> g_OutputMipFace : register(u0);
 
-cbuffer PrefilterCB : register(b0)
-{
-    float Roughness;
-    uint  FaceIndex;
-    uint  OutputSize; // 이 밉의 해상도 (예: 밉0=256, 밉1=128, ...)
-    uint  SampleCount; // 러프니스 높을수록 샘플 수 늘려도 됨 (예: 32~256)
-}; // PrefilterCB
+ConstantBuffer<PrefilterCB> g_PrefilterCB : register(b0);
 
 float3 GetFaceDirection(uint face, float2 uv) // uv: [-1,1] 범위
 {
@@ -70,21 +72,21 @@ float3 ImportanceSampleGGX(float2 Xi, float3 N, float roughness)
 [numthreads(8, 8, 1)]
 void main(uint3 dtid : SV_DispatchThreadID)
 {
-    if (dtid.x >= OutputSize || dtid.y >= OutputSize)
+    if (dtid.x >= g_PrefilterCB.OutputSize || dtid.y >= g_PrefilterCB.OutputSize)
         return;
 
-    float2 uv = (float2(dtid.xy) + 0.5f) / float(OutputSize) * 2.0f - 1.0f;
-    float3 N = GetFaceDirection(FaceIndex, uv);
+    float2 uv = (float2(dtid.xy) + 0.5f) / float(g_PrefilterCB.OutputSize) * 2.0f - 1.0f;
+    float3 N = GetFaceDirection(g_PrefilterCB.FaceIndex, uv);
     float3 R = N;
     float3 V = N;
 
     float3 prefilteredColor = 0.0f;
     float totalWeight = 0.0f;
 
-    for (uint i = 0; i < SampleCount; ++i)
+    for (uint i = 0; i < g_PrefilterCB.SampleCount; ++i)
     {
-        float2 Xi = Hammersley(i, SampleCount);
-        float3 H = ImportanceSampleGGX(Xi, N, Roughness);
+        float2 Xi = Hammersley(i, g_PrefilterCB.SampleCount);
+        float3 H = ImportanceSampleGGX(Xi, N, g_PrefilterCB.Roughness);
         float3 L = normalize(2.0f * dot(V, H) * H - V);
 
         float NdotL = saturate(dot(N, L));

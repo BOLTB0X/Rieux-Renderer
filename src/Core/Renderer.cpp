@@ -665,7 +665,7 @@ void Renderer::ProbeCapturePass(ID3D12GraphicsCommandList* cmdList) {
         const float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
         cmdList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
 
-        cmdList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+        cmdList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
         cmdList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
 
         Sponza::SubmitIndirectParams submitParams;

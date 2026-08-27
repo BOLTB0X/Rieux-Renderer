@@ -50,7 +50,7 @@ bool EnvironmentProbe::Init(const InitParams& params) {
     if (!depth) return false;
     m_depthTexture = depth.get();
 
-    m_faceProjMatrix = XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.0f, 0.1f, 4000.0f);
+    m_faceProjMatrix = XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.0f, 4000.0f, 0.1f);
 
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     const UINT cbSize = (sizeof(GPUCommons::FrameCB) + 255) & ~255;

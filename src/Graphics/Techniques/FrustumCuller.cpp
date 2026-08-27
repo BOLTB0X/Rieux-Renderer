@@ -191,13 +191,13 @@ void FrustumCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount,
     CD3DX12_RESOURCE_DESC visibleDesc = CD3DX12_RESOURCE_DESC::Buffer(
         commandStructSize * maxCount, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &visibleDesc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&outVisibleBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outVisibleBuf));
 
     // Counter Buffer 생성
     CD3DX12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
         sizeof(UINT), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&outCounterBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outCounterBuf));
 
     // ==========================================
     // Visible Commands UAV & SRV (Structured Buffer)

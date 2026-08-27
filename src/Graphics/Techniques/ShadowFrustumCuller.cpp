@@ -17,7 +17,7 @@ ShadowFrustumCuller::ShadowFrustumCuller()
     : m_rootSignature(nullptr), m_computePSO(nullptr), m_maxMainCount(0), m_maxVaseCount(0), m_heapAllocator(nullptr),
     m_mainVisibleDescIndex{}, m_mainVisibleSRVIndex{}, m_vaseVisibleDescIndex{}, m_vaseVisibleSRVIndex{},
     m_mainCounterUAVIndex(0), m_mainCounterSRVIndex(0), m_vaseCounterUAVIndex(0), m_vaseCounterSRVIndex(0),
-    m_cachedMainVisibleCounts{}, m_cachedVaseVisibleCounts{} {
+    m_cachedMainVisibleCounts{}, m_cachedVaseVisibleCounts{}, m_hasValidVisibleBuffers(false) {
 
     for (int i = 0; i < MAX_CASCADES; ++i) {
         m_cachedMainVisibleCounts[i] = 0;
@@ -91,9 +91,13 @@ void ShadowFrustumCuller::Dispatch(const DispatchParams& param) {
     barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_mainCounterBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
     barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_vaseCounterBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
+    D3D12_RESOURCE_STATES initialResourceState = m_hasValidVisibleBuffers
+        ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        : D3D12_RESOURCE_STATE_COMMON;
+
     for (int i = 0; i < MAX_CASCADES; ++i) {
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_mainVisibleCommandsCascade[i].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
-        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_vaseVisibleCommandsCascade[i].Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_mainVisibleCommandsCascade[i].Get(), initialResourceState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+        barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(m_vaseVisibleCommandsCascade[i].Get(), initialResourceState, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
     }
     cmdList->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
 
@@ -134,6 +138,7 @@ void ShadowFrustumCuller::Dispatch(const DispatchParams& param) {
         barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
     cmdList->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
+    m_hasValidVisibleBuffers = true;
 } // Dispatch
 
 void ShadowFrustumCuller::PrepareForIndirectDraw(ID3D12GraphicsCommandList* cmdList) {
@@ -228,7 +233,8 @@ void ShadowFrustumCuller::BuildBuffers(ID3D12Device* device) {
         CD3DX12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
             sizeof(UINT) * 4, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
         device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
-            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&buffer));
+            D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&buffer));
+            //D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&buffer));
 
         uavIdx = m_heapAllocator->Allocate();
         D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
@@ -269,7 +275,7 @@ void ShadowFrustumCuller::BuildGroupResources(ID3D12Device* device, UINT maxCoun
     CD3DX12_RESOURCE_DESC visibleDesc = CD3DX12_RESOURCE_DESC::Buffer(
         commandStructSize * maxCount, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &visibleDesc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&outBuffer));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outBuffer));
 
     outDescIndex = m_heapAllocator->Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC uavDescView = {};
