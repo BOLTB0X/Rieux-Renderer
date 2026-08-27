@@ -42,8 +42,12 @@ struct MeshInstanceData
     uint   metallicIndex;
     uint   roughnessIndex;
     float  metallicFactor;
+    
     float  roughnessFactor;
-    float3 mPadding3;
+    uint   shadowIndexCount;
+    uint   shadowStartIndex;
+    float  mPadding3;
+    
     float4 albedoFactor;
 }; // MeshInstanceData
 

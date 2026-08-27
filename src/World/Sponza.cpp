@@ -156,7 +156,7 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
             params.mainVisibleCommandsBuffer,
             0, 
             params.mainCounterBuffer,
-            0
+            params.mainCounterOffset
         );
     }
 
@@ -168,7 +168,7 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
             params.vaseVisibleCommandsBuffer,
             0,
             params.vaseCounterBuffer,
-            0
+            params.vaseCounterOffset
         );
     }
 } // SubmitIndirect
@@ -185,9 +185,7 @@ void Sponza::RenderDebugAABB(const RenderDebugParams& params) {
     cmdList->SetGraphicsRootDescriptorTable(RendererState::DebugInstanceDataIndex, GetInstanceDataGPUHandle());
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
 
-    // 원본 버퍼를 모두 빨간색으로 그리기
-    uint32_t passTypeAll = 0; // 0: Red
-    // RootConstants 중 두 번째(Offset 1) 값만 덮어씀
+    uint32_t passTypeAll = 0;
     cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugInstanceIndex, 1, &passTypeAll, 1);
 
     if (m_mainIndirectBuffer.Get()) {
@@ -273,6 +271,9 @@ bool Sponza::BuildInstanceDataBuffer(ID3D12Device* device, const int gridSize, c
                     meshName.find("leaf") != std::string::npos ||
                     meshName.find("Material__57") != std::string::npos);
                 data.isVase = isVase ? 1.0f : 0.0f;
+
+                data.shadowIndexCount = mesh->GetShadowIndexCount();
+                data.shadowStartIndex = mesh->GetShadowStartIndex();
 
                 instanceDataArray.push_back(data);
             } // for (const auto& mesh : m_meshes)

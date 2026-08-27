@@ -49,6 +49,9 @@ public:
         ID3D12Resource*            vaseVisibleCommandsBuffer;
         ID3D12Resource*            vaseCounterBuffer;
 
+        UINT                       mainCounterOffset;
+        UINT                       vaseCounterOffset;
+
         SubmitIndirectType         type;
 
         SubmitIndirectParams()
@@ -56,7 +59,7 @@ public:
             cascadeIndex(UINT_MAX), shadowMapDescriptorIndex(UINT_MAX), csmShadowMapDescriptorIndex(UINT_MAX),
             mainVisibleCommandsBuffer(nullptr), mainCounterBuffer(nullptr),
             vaseVisibleCommandsBuffer(nullptr), vaseCounterBuffer(nullptr),
-            type(SubmitIndirectType::General){
+            mainCounterOffset(0), vaseCounterOffset(0), type(SubmitIndirectType::General){
         }
     }; // SubmitIndirectParams
 

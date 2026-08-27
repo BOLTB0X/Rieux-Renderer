@@ -10,7 +10,8 @@ using namespace Microsoft::WRL;
 
 PBRMesh::PBRMesh()
     : m_ibView{}, m_indexCount(0), m_materialIndex(0),
-    m_vertexBufferSRVIndex(UINT_MAX), m_aabbMin(FLT_MAX, FLT_MAX, FLT_MAX), m_aabbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX) {
+    m_vertexBufferSRVIndex(UINT_MAX), m_aabbMin(FLT_MAX, FLT_MAX, FLT_MAX), m_aabbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX), 
+    m_shadowIndexCount(0), m_shadowStartIndex(0) {
 } // PBRMesh
 
 PBRMesh::~PBRMesh() {
@@ -30,6 +31,9 @@ bool PBRMesh::Init(const InitParams& params,
     m_name = params.name;
     m_aabbMin = params.aabbMin;
     m_aabbMax = params.aabbMax;
+
+    m_shadowIndexCount = (params.shadowIndexCount > 0) ? params.shadowIndexCount : m_indexCount;
+    m_shadowStartIndex = params.shadowStartIndex;
 
     const UINT vbSize = static_cast<UINT>(sizeof(PBRVertex) * params.vertices->size());
     const UINT ibSize = static_cast<UINT>(sizeof(unsigned int) * params.indices->size());
@@ -153,3 +157,11 @@ const DirectX::XMFLOAT3& PBRMesh::GetAABBMin() const {
 const DirectX::XMFLOAT3& PBRMesh::GetAABBMax() const {
     return m_aabbMax;
 } // GetAABBMax
+
+UINT PBRMesh::GetShadowIndexCount() const {
+    return m_shadowIndexCount;
+} // GetShadowIndexCount
+
+UINT PBRMesh::GetShadowStartIndex() const {
+    return m_shadowStartIndex;
+} // GetShadowStartIndex

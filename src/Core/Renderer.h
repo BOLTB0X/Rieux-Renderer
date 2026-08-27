@@ -31,6 +31,7 @@ class RenderTexture;
 class RenderTextureManager;
 class Sponza;
 class RendererDebugger;
+class ShadowFrustumCuller;
 class CascadedShadowMap;
 class EnvironmentProbe;
 
@@ -61,6 +62,8 @@ private:
         GPU_QUERY_PROBE_END,
         GPU_QUERY_FRUSTUM_BEGIN,
         GPU_QUERY_FRUSTUM_END,
+        GPU_QUERY_SHADOW_FRUSTUM_BEGIN,
+        GPU_QUERY_SHADOW_FRUSTUM_END,
         GPU_QUERY_OCCLUSION_PHASE1_BEGIN,
         GPU_QUERY_OCCLUSION_PHASE1_END,
         GPU_QUERY_DEPTH_BEGIN,
@@ -90,6 +93,7 @@ private:
 
     void ProbeCapturePass(ID3D12GraphicsCommandList*);
     void FrustumPass(ID3D12GraphicsCommandList*);
+    void ShadowFrustumPass(ID3D12GraphicsCommandList*);
     void DepthPass(ID3D12GraphicsCommandList*);
     void ShadowPass(ID3D12GraphicsCommandList*);
     void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
@@ -125,7 +129,7 @@ private:
     // Techniques 데이터
     // --------------------------------------------------
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
-    std::unique_ptr<FrustumCuller>           m_ShadowFrustumCuller;
+    std::unique_ptr<ShadowFrustumCuller>     m_ShadowFrustumCuller;
     std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<CascadedShadowMap>       m_CascadedShadowMap;

@@ -46,6 +46,7 @@ public:
 
 public:
     void                        SetCurrentStateWithoutBarrier(D3D12_RESOURCE_STATES);
+
     RenderTextureType           GetType() const;
     ID3D12Resource*             GetResource() const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle() const;
@@ -60,9 +61,17 @@ public:
     D3D12_GPU_DESCRIPTOR_HANDLE GetMipSRVGPUHandle(UINT) const;
     D3D12_GPU_DESCRIPTOR_HANDLE GetMipUAVGPUHandle(UINT) const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle(UINT) const;
+    UINT                        GetMipFaceUAVIndex(UINT, UINT) const;
     UINT                        GetArraySize() const;
 
     bool                        IsCubeMap() const;
+
+private:
+    bool CreateTextureResource(const InitParams&);
+    bool CreateDepthViews(const InitParams&);
+    bool CreateRenderTargetViews(const InitParams&);
+    bool CreateShaderResourceViews(const InitParams&);
+    bool CreateUnorderedAccessViews(const InitParams&);
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource>   m_resource;
@@ -84,4 +93,5 @@ private:
     UINT                                     m_arraySize;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_dsvSliceHandles;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_rtvSliceHandles;
+    std::vector<UINT>                        m_mipFaceUavIndices;
 }; // RenderTexture

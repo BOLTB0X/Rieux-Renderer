@@ -109,6 +109,6 @@ float Calculate_CascadeShadow(float3 positionWS, float3 normalWS, float viewSpac
     float nextShadow = Sample_CascadeShadow(positionWS, normalWS, cascade + 1);
     float blend = saturate((viewSpaceDepth - blendStart) / blendRange);
     return lerp(shadow, nextShadow, blend);
-}
+} // Calculate_CascadeShadow
 
 #endif // _SHADOW_MAP_HLSLI_
