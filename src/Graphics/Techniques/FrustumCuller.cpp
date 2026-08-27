@@ -18,7 +18,9 @@ using namespace Microsoft::WRL;
 FrustumCuller::FrustumCuller()
     : m_rootSignature(nullptr), m_computePSO(nullptr),
     m_mainVisibleDescIndex(UINT_MAX), m_mainCounterDescIndex(UINT_MAX),
+    m_mainVisibleSRVIndex(UINT_MAX), m_mainCounterSRVIndex(UINT_MAX),
     m_vaseVisibleDescIndex(UINT_MAX), m_vaseCounterDescIndex(UINT_MAX),
+    m_vaseVisibleSRVIndex(UINT_MAX), m_vaseCounterSRVIndex(UINT_MAX),
     m_maxMainCount(0), m_maxVaseCount(0), m_cachedMainVisibleCount(0), m_cachedVaseVisibleCount(0),
     m_heapAllocator(nullptr) {
     m_frustum = std::make_unique<Frustum>();
@@ -40,7 +42,7 @@ bool FrustumCuller::Init(const InitParams& params) {
     m_computePSO = params.pso;
     m_heapAllocator = params.heapAllocator;
 
-    m_frustum->Init(RendererState::ScreenDepth);
+    m_frustum->Init(RendererState::ScreenDepth, false);
     BuildBuffers(params.device);
     return true;
 } // Init
@@ -139,6 +141,34 @@ void FrustumCuller::ReadbackToCPU(ID3D12GraphicsCommandList* cmdList) {
     cmdList->ResourceBarrier(2, back);
 } // ReadbackToCPU
 
+void FrustumCuller::PrepareForIndirectDraw(ID3D12GraphicsCommandList* cmdList) {
+    D3D12_RESOURCE_BARRIER toIndirect[4] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(m_mainVisibleCommandsBuffer.Get(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_vaseVisibleCommandsBuffer.Get(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_mainCounterBuffer.Get(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_vaseCounterBuffer.Get(),
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)
+    };
+    cmdList->ResourceBarrier(4, toIndirect);
+} // PrepareForIndirectDraw
+
+void FrustumCuller::RestoreAfterIndirectDraw(ID3D12GraphicsCommandList* cmdList) {
+    D3D12_RESOURCE_BARRIER toSRV[4] = {
+        CD3DX12_RESOURCE_BARRIER::Transition(m_mainVisibleCommandsBuffer.Get(),
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_vaseVisibleCommandsBuffer.Get(),
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_mainCounterBuffer.Get(),
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_vaseCounterBuffer.Get(),
+            D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+    };
+    cmdList->ResourceBarrier(4, toSRV);
+} // RestoreAfterIndirectDraw
+
 Frustum*        FrustumCuller::GetFrustum() const { return m_frustum.get(); }
 ID3D12Resource* FrustumCuller::GetMainVisibleCommandsBuffer() const { return m_mainVisibleCommandsBuffer.Get(); }
 ID3D12Resource* FrustumCuller::GetVaseVisibleCommandsBuffer() const { return m_vaseVisibleCommandsBuffer.Get(); }
@@ -157,17 +187,17 @@ void FrustumCuller::BuildGroupResources(ID3D12Device* device, UINT maxCount,
     UINT commandStructSize = sizeof(GPUCommons::IndirectCommand);
     CD3DX12_HEAP_PROPERTIES defaultHeap(D3D12_HEAP_TYPE_DEFAULT);
 
-    // 1. Visible Buffer 생성
+    // Visible Buffer 생성
     CD3DX12_RESOURCE_DESC visibleDesc = CD3DX12_RESOURCE_DESC::Buffer(
         commandStructSize * maxCount, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &visibleDesc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&outVisibleBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outVisibleBuf));
 
-    // 2. Counter Buffer 생성
+    // Counter Buffer 생성
     CD3DX12_RESOURCE_DESC counterDesc = CD3DX12_RESOURCE_DESC::Buffer(
         sizeof(UINT), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
     device->CreateCommittedResource(&defaultHeap, D3D12_HEAP_FLAG_NONE, &counterDesc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr, IID_PPV_ARGS(&outCounterBuf));
+        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&outCounterBuf));
 
     // ==========================================
     // Visible Commands UAV & SRV (Structured Buffer)

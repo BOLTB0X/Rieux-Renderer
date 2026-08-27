@@ -10,7 +10,7 @@ public:
     Frustum& operator=(const Frustum&) = delete;
     ~Frustum();
 
-    void Init(float);
+    void Init(float, bool isOrthographic = false);
     void Frame(DirectX::XMMATRIX, DirectX::XMMATRIX);
 
 public:
@@ -26,4 +26,5 @@ public:
 private:
     float m_screenDepth;
     float m_planes[6][4];
+    bool  m_isOrthographic;
 }; // Frustum

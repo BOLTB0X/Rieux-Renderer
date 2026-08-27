@@ -7,7 +7,7 @@ class DescriptorHeapAllocator;
 class RenderTarget {
 public:
     struct InitParams {
-        ID3D12Device* device;
+        ID3D12Device*            device;
         DescriptorHeapAllocator* sharedDescriptorAllocator;
         UINT                     width;
         UINT                     height;
@@ -37,12 +37,12 @@ public:
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource>       m_colorTexture;
     Microsoft::WRL::ComPtr<ID3D12Resource>       m_depthTexture;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap; // non-shader-visible, 디스크립터 1개
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap; // non-shader-visible, 디스크립터 1개
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_rtvHeap;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_dsvHeap;
 
-    D3D12_CPU_DESCRIPTOR_HANDLE                  m_rtvHandle; // 캐싱 (단일 리소스라 불변)
-    D3D12_CPU_DESCRIPTOR_HANDLE                  m_dsvHandle; // 캐싱
-    UINT                                         m_colorSRVIndex; // 공유 힙 인덱스 캐싱
+    D3D12_CPU_DESCRIPTOR_HANDLE                  m_rtvHandle;
+    D3D12_CPU_DESCRIPTOR_HANDLE                  m_dsvHandle;
+    UINT                                         m_colorSRVIndex;
     D3D12_VIEWPORT                               m_viewport;
     D3D12_RECT                                   m_scissorRect;
 }; // RenderTarget

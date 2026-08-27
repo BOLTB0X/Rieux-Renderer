@@ -48,6 +48,8 @@ public:
     void Frame(DirectX::XMMATRIX, DirectX::XMMATRIX);
     void Dispatch(const DispatchParams&);
     void ReadbackToCPU(ID3D12GraphicsCommandList*);
+    void PrepareForIndirectDraw(ID3D12GraphicsCommandList*);
+    void RestoreAfterIndirectDraw(ID3D12GraphicsCommandList*);
 
 public:
     void            OnGUI();

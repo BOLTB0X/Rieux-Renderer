@@ -225,7 +225,7 @@ void RendererDebugger::DebugCascadedShadowMap(ID3D12GraphicsCommandList* cmdList
         float debugMode[2] = { -1.0f, 1.0f };
         cmdList->SetGraphicsRoot32BitConstants(RendererState::DebugCameraClipIndex, 2, debugMode, 0);
         cmdList->SetGraphicsRootDescriptorTable(RendererState::DebugDepthTexIndex,
-            m_sharedDescriptorAllocator->GetGPUHandle(shadowTexture->GetSRVIndex(cascade)));
+            m_sharedDescriptorAllocator->GetGPUHandle(shadowTexture->GetSliceSRVIndex(cascade)));
         cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         cmdList->DrawInstanced(3, 1, 0, 0);
         debugTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);

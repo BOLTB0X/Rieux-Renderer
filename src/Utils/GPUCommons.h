@@ -66,8 +66,12 @@ namespace GPUCommons {
         uint32_t          metallicIndex;
         uint32_t          roughnessIndex;
         float             metallicFactor;
+
         float             roughnessFactor;
-        DirectX::XMFLOAT3 padding3;
+        uint32_t          shadowIndexCount;
+        uint32_t          shadowStartIndex;
+        float             padding3;
+
         DirectX::XMFLOAT4 albedoFactor;
 
         MeshInstanceData()
@@ -79,7 +83,8 @@ namespace GPUCommons {
             isVase(0.0f), metallicIndex(UINT_MAX), roughnessIndex(UINT_MAX),
             metallicFactor(SharedCommons::METALLIC_FACTOR),
             roughnessFactor(SharedCommons::ROUGH_FACTOR),
-            padding3(0.0f, 0.0f, 0.0f), albedoFactor(SharedCommons::ALBEDO_FACTOR) {
+            shadowIndexCount(0), shadowStartIndex(0), padding3(0.0f),
+            albedoFactor(SharedCommons::ALBEDO_FACTOR) {
 		}
     }; // MeshInstanceData
 

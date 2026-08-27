@@ -8,7 +8,6 @@
 #include "D3D12SwapChain.h"
 #include "D3D12RootSignature.h"
 #include "D3D12PipelineState.h"
-#include "D3D12/RenderTarget.h"
 // Managers
 #include "RenderTextureManager.h"
 #include "TextureManager.h"
@@ -16,6 +15,9 @@
 #include "ImGuiManager.h"
 // Graphics/Tools
 #include "DescriptorHeapAllocator.h"
+#include "RenderTarget.h"
+// Graphics/Data
+#include "CascadedShadowMap.h"
 // Components
 #include "RenderQueue.h"
 #include "Camera.h"
@@ -23,9 +25,10 @@
 #include "GPUMonitor.h"
 // Techniques
 #include "FrustumCuller.h"
+#include "ShadowFrustumCuller.h"
 #include "HierarchicalZBuffer.h"
 #include "OcclusionCuller.h"
-#include "CascadedShadowMap.h"
+#include "EnvironmentProbe.h"
 // World
 #include "Sponza.h"
 // Utils
@@ -52,10 +55,11 @@ Renderer::Renderer() {
     m_SceneCamera = std::make_unique<Camera>();
     m_MasterCamera = std::make_unique<Camera>();
     m_FrustumCuller = std::make_unique<FrustumCuller>();
+    m_ShadowFrustumCuller = std::make_unique<ShadowFrustumCuller>();
 	m_HierarchicalZBuffer = std::make_unique<HierarchicalZBuffer>();
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
     m_CascadedShadowMap = std::make_unique<CascadedShadowMap>();
-
+    m_EnvironmentProbe = std::make_unique<EnvironmentProbe>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -208,6 +212,10 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     csmFrameParams.lightDir = m_DirectionalLight->GetDirection();
     m_CascadedShadowMap->Frame(csmFrameParams);
 
+    if (m_CascadedShadowMap->IsDirty()) {
+        m_ShadowFrustumCuller->Frame(m_CascadedShadowMap->GetCascadeView(), m_CascadedShadowMap->GetCascadeProj());
+    }
+
     RendererState::FrameParams stateParams;
     stateParams.view = renderCamera->GetViewMatrix();
     stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
@@ -238,8 +246,11 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
     m_RendererState->FrameScene(sceneFrameParams);
 
-    //m_RendererDebugger->Frame();
-    
+    EnvironmentProbe::FrameParams envFrameParams;
+    envFrameParams.cameraPos = m_SceneCamera->GetPosition();
+    envFrameParams.cameraDir = m_SceneCamera->GetRotation();
+    m_EnvironmentProbe->Frame(envFrameParams);
+
     return Render();
 } // Frame
 
@@ -269,17 +280,20 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
         }
     }
 
+    auto device = m_D3D12Device->GetDevice();
+
     // 메인 다이렉트 커맨드 큐 초기화
-    if (!m_CommandQueue->Init(m_D3D12Device->GetDevice())) {
+    if (!m_CommandQueue->Init(device)) {
         DebugHelper::DebugPrint("CommandQueue 초기화 실패");
         return false;
     }
+    auto commandQueue = m_CommandQueue->GetQueue();
 
     // 백버퍼 및 프리젠트 전용 스왑체인 초기화 파라미터 조립
     D3D12SwapChain::InitParams swapChainParams;
     swapChainParams.hwnd = hwnd;
-    swapChainParams.device = m_D3D12Device->GetDevice();
-    swapChainParams.commandQueue = m_CommandQueue->GetQueue();
+    swapChainParams.device = device;
+    swapChainParams.commandQueue = commandQueue;
     swapChainParams.width = width;
     swapChainParams.height = height;
     swapChainParams.frameCount = RendererState::FrameCount;
@@ -300,8 +314,8 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
     // GPU 프로파일러 초기화
     GPUMonitor::InitParams gpuParams;
     gpuParams.adapter = m_D3D12Device->GetAdapter();
-    gpuParams.device = m_D3D12Device->GetDevice();
-    gpuParams.commandQueue = m_CommandQueue->GetQueue();
+    gpuParams.device = device;
+    gpuParams.commandQueue = commandQueue;
     if (!m_GPUMonitor->Init(gpuParams)) {
         DebugHelper::DebugPrint("m_GPUMonitor 초기화 실패");
         return false;
@@ -310,9 +324,11 @@ bool Renderer::LoadPipeline(HWND hwnd, int width, int height) {
 } // LoadPipeline
 
 bool Renderer::LoadSceneRenderTarget(int width, int height) {
+    auto device = m_D3D12Device->GetDevice();
+
     // 오프스크린 렌더 텍스처 매니저 초기화
     RenderTextureManager::InitParams rtmParams;
-    rtmParams.device = m_D3D12Device->GetDevice();
+    rtmParams.device = device;
     rtmParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
     rtmParams.rtvCapacity = RendererState::RTVCapacity;
     rtmParams.dsvCapacity = RendererState::DSVCapacity;
@@ -321,9 +337,9 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
         return false;
     }
 
-    // 실제 메인 씬이 그려질 오프스크린 컬러 + 뎁스 버퍼 지정
+    // 실제 메인 씬이 그려질 오프스크린 컬러, 뎁스 버퍼 지정
     RenderTarget::InitParams rtParams;
-    rtParams.device = m_D3D12Device->GetDevice();
+    rtParams.device = device;
     rtParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
     rtParams.width = width;
     rtParams.height = height;
@@ -361,6 +377,17 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
 
     if (!m_RendererState->Init(m_D3D12Device->GetDevice())) {
         DebugHelper::DebugPrint("m_RendererState 초기화 실패");
+        return false;
+    }
+
+    EnvironmentProbe::InitParams envInit;
+    envInit.device = device;
+    envInit.renderTextureManager = m_RenderTextureManager.get();
+    envInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    envInit.faceSize = 256;
+    envInit.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    if (!m_EnvironmentProbe->Init(envInit)) {
+        DebugHelper::DebugPrint("m_EnvironmentProbe 초기화 실패");
         return false;
     }
 
@@ -406,10 +433,10 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.psoWireNoCull = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SPONZA_WIRE_NO_CULL)->GetPSO();
     sponzaInitParams.psoDepthSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoDepthAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_DEPTH_ALPHA_NO_CULL)->GetPSO();
-    sponzaInitParams.psoShadowSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_SOLID_CULL)->GetPSO();
-    sponzaInitParams.psoShadowAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_SHADOW_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoCSMSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_CSM_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoCSMAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_CSM_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoProbeSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_PROBE_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoProbeAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_PROBE_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
@@ -436,12 +463,23 @@ bool Renderer::LoadAssets(HWND hwnd) {
     frumInit.device = device;
 	frumInit.maxMainCount = m_Sponza->GetMainIndirectCount();
 	frumInit.maxVaseCount = m_Sponza->GetVaseIndirectCount();
-    frumInit.rootSig = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_CULLING_SIG);
-	frumInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_CULLING_CS)->GetPSO();
+    frumInit.rootSig = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_FRUSTUM_CULLING_SIG);
+	frumInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_FRUSTUM_CULLING_CS)->GetPSO();
     frumInit.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_FrustumCuller->Init(frumInit)) {
         DebugHelper::DebugPrint("m_FrustumCuller 초기화 실패");
         return false;
+    }
+
+    ShadowFrustumCuller::InitParams shadowCullInit;
+    shadowCullInit.device = device;
+    shadowCullInit.maxMainCount = m_Sponza->GetMainIndirectCount();
+    shadowCullInit.maxVaseCount = m_Sponza->GetVaseIndirectCount();
+    shadowCullInit.rootSig = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_SHADOW_FRUSTUM_CULLING_SIG);
+    shadowCullInit.pso = m_PSOManager->GetPSO(SharedCommons::KEY_SHADOW_FRUSTUM_CULLING_CS)->GetPSO();
+    shadowCullInit.heapAllocator = m_sharedDescriptorAllocator.get();
+    if (!m_ShadowFrustumCuller->Init(shadowCullInit)) {
+        DebugHelper::DebugPrint("m_ShadowFrustumCuller 초기화 실패");
     }
 
 	HierarchicalZBuffer::InitParams hzInit;
@@ -529,14 +567,14 @@ void Renderer::PopulateCommandList() {
     ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
-    m_GPUMonitor->RecordTimestamp(cmdList, 0);
+    ProbeCapturePass(cmdList);
 
     FrustumPass(cmdList);
+    ShadowFrustumPass(cmdList);
  
     OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
     ShadowPass(cmdList);
-    m_RendererDebugger->DebugCascadedShadowMap(cmdList);
     OcclusionPhase2Pass(cmdList);
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
@@ -548,9 +586,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
-    //m_RendererDebugger->DebugSceneCameraFrustum(cmdList);
 
-    m_GPUMonitor->RecordTimestamp(cmdList, 1);
     m_SceneRenderTarget->EndRender(cmdList);
 
     D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {
@@ -580,19 +616,84 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_IMGUI_BEGIN);
     m_ImGuiManager->RenderDrawData(cmdList);
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_IMGUI_END);
 
     CD3DX12_RESOURCE_BARRIER toPresentBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_SwapChain->GetCurrentBackBuffer(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
     cmdList->ResourceBarrier(1, &toPresentBarrier);
 
-    m_GPUMonitor->ResolveQueryData(cmdList);
+    m_GPUMonitor->ResolveQueryData(cmdList, GPU_QUERY_COUNT);
     cmdList->Close();
 } // PopulateCommandList
 
+void Renderer::ProbeCapturePass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(200, 200, 0), L"Environment Probe Capture");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_BEGIN);
+
+    // 더티 체크 및 조기 반환
+    if (!m_EnvironmentProbe->IsDirty()) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    RenderTexture* cubemap = m_EnvironmentProbe->GetCubemapTexture();
+    RenderTexture* probeDepth = m_EnvironmentProbe->GetDepthTexture();
+
+    if (!cubemap || !probeDepth) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    cubemap->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    probeDepth->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+    UINT faceSize = m_EnvironmentProbe->GetFaceSize();
+    D3D12_VIEWPORT viewport = { 0, 0, (float)faceSize, (float)faceSize, 0.0f, 1.0f };
+    D3D12_RECT scissor = { 0, 0, (LONG)faceSize, (LONG)faceSize };
+    cmdList->RSSetViewports(1, &viewport);
+    cmdList->RSSetScissorRects(1, &scissor);
+
+    for (UINT face = 0; face < EnvironmentProbe::FACE_COUNT; ++face) {
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv = cubemap->GetRTVHandle(face);
+        D3D12_CPU_DESCRIPTOR_HANDLE dsv = probeDepth->GetDSVHandle();
+
+        const float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+        cmdList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
+
+        cmdList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0.0f, 0, 0, nullptr);
+        cmdList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+
+        Sponza::SubmitIndirectParams submitParams;
+        submitParams.cmdList = cmdList;
+        submitParams.frameConstantsGPUAddress = m_EnvironmentProbe->GetFaceFrameCBGPUAddress(face);
+        submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+        submitParams.shadowMapDescriptorIndex = UINT_MAX;
+        submitParams.csmShadowMapDescriptorIndex = UINT_MAX;
+        submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
+        submitParams.mainCounterBuffer = nullptr;
+        submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
+        submitParams.vaseCounterBuffer = nullptr;
+        submitParams.type = Sponza::SubmitIndirectType::ProbeCapture;
+
+        m_Sponza->SubmitIndirect(submitParams);
+    }
+
+    cubemap->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    probeDepth->Transition(cmdList, D3D12_RESOURCE_STATE_COMMON);
+    m_EnvironmentProbe->ClearDirty();
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_END);
+    PIXEndEvent(cmdList);
+} // ProbeCapturePass
+
 void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 255), L"Frustum Culling Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_FRUSTUM_BEGIN);
 
     FrustumCuller::DispatchParams cullParams = {};
     cullParams.cmdList = cmdList;
@@ -602,13 +703,35 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
     cullParams.mainIndirectBuffer = m_Sponza->GetMainIndirectBuffer();
     cullParams.vaseIndirectBuffer = m_Sponza->GetVaseIndirectBuffer();
     m_FrustumCuller->Dispatch(cullParams);
-    //m_FrustumCuller->ReadbackToCPU(cmdList);
 
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_FRUSTUM_END);
     PIXEndEvent(cmdList);
 } // FrustumPass
 
+void Renderer::ShadowFrustumPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(180, 80, 200), L"Shadow Frustum Culling Pass");
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_BEGIN);
+
+    if (!m_CascadedShadowMap->IsDirty()) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    ShadowFrustumCuller::DispatchParams cullParams = {};
+    cullParams.cmdList = cmdList;
+    cullParams.instanceDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
+    cullParams.masterIndirectDescriptorIndex = m_Sponza->GetMasterIndirectDescriptorIndex();
+    m_ShadowFrustumCuller->Dispatch(cullParams);
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_END);
+    PIXEndEvent(cmdList);
+} // ShadowFrustumPass
+
 void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(255, 165, 0), L"Occlusion Culling Phase 1");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_OCCLUSION_PHASE1_BEGIN);
 
     auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
     hizTexture->Transition(cmdList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -624,11 +747,13 @@ void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
     params.meshInstanceDataDescIndex = m_Sponza->GetInstanceDataDescriptorIndex();
 
     m_OcclusionCuller->DispatchPhase1(params);
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_OCCLUSION_PHASE1_END);
     PIXEndEvent(cmdList);
 } // OcclusionPhase1Pass
 
 void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 0, 255), L"Depth Recording Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_DEPTH_BEGIN);
     auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
 
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -652,25 +777,36 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
 
     m_Sponza->SubmitIndirect(submitParams);
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_DEPTH_END);
     PIXEndEvent(cmdList);
 
     PIXBeginEvent(cmdList, PIX_COLOR(0, 255, 0), L"Hi-Z Build Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_HIZ_BEGIN);
     HierarchicalZBuffer::BuildParams hizParams;
     hizParams.cmdList = cmdList;
     hizParams.depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
     hizParams.hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
     m_HierarchicalZBuffer->Build(hizParams);
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_HIZ_END);
     PIXEndEvent(cmdList);
 
-    //m_RendererDebugger->DebugHiZRenderTextures(cmdList);
 } // DepthPass
 
 void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(180, 120, 40), L"Cascaded Shadow Map Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_CSM_BEGIN);
 
-    auto shadowTexture = m_RenderTextureManager->GetRenderTexture(
-        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+    auto shadowTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
     if (!shadowTexture) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_CSM_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    if (!m_CascadedShadowMap->IsDirty()) {
+        shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_CSM_END);
         PIXEndEvent(cmdList);
         return;
     }
@@ -681,16 +817,19 @@ void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
     viewport.Width = static_cast<float>(shadowTexture->GetWidth());
     viewport.Height = static_cast<float>(shadowTexture->GetHeight());
     viewport.MaxDepth = 1.0f;
-    D3D12_RECT scissor = {
-        0, 0,
-        static_cast<LONG>(shadowTexture->GetWidth()),
-        static_cast<LONG>(shadowTexture->GetHeight())
-    };
+    D3D12_RECT scissor = { 0, 0, static_cast<LONG>(shadowTexture->GetWidth()), static_cast<LONG>(shadowTexture->GetHeight()) };
     cmdList->RSSetViewports(1, &viewport);
     cmdList->RSSetScissorRects(1, &scissor);
 
+    // 캐스케이드 전체에 대해 한 번만 전환
+    m_ShadowFrustumCuller->PrepareForIndirectDraw(cmdList);
+
     const UINT cascadeCount = m_CascadedShadowMap->GetCascadeCount();
     for (UINT cascade = 0; cascade < cascadeCount; ++cascade) {
+        if (!m_CascadedShadowMap->GetCascadeDirty(cascade)) {
+            continue;
+        }
+
         D3D12_CPU_DESCRIPTOR_HANDLE sliceDsv = shadowTexture->GetDSVHandle(cascade);
         cmdList->ClearDepthStencilView(sliceDsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
         cmdList->OMSetRenderTargets(0, nullptr, FALSE, &sliceDsv);
@@ -701,21 +840,30 @@ void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
         submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
         submitParams.cascadeIndex = cascade;
         submitParams.shadowMapDescriptorIndex = UINT_MAX;
-        submitParams.mainVisibleCommandsBuffer = m_Sponza->GetMainIndirectBuffer();
-        submitParams.mainCounterBuffer = nullptr;
-        submitParams.vaseVisibleCommandsBuffer = m_Sponza->GetVaseIndirectBuffer();
-        submitParams.vaseCounterBuffer = nullptr;
+
+        submitParams.mainVisibleCommandsBuffer = m_ShadowFrustumCuller->GetMainVisibleCommandsBuffer(cascade);
+        submitParams.mainCounterBuffer = m_ShadowFrustumCuller->GetMainCounterBuffer();
+        submitParams.mainCounterOffset = m_ShadowFrustumCuller->GetCounterBufferOffset(cascade);
+
+        submitParams.vaseVisibleCommandsBuffer = m_ShadowFrustumCuller->GetVaseVisibleCommandsBuffer(cascade);
+        submitParams.vaseCounterBuffer = m_ShadowFrustumCuller->GetVaseCounterBuffer();
+        submitParams.vaseCounterOffset = m_ShadowFrustumCuller->GetCounterBufferOffset(cascade);
+
         submitParams.type = Sponza::SubmitIndirectType::CSMShadow;
 
         m_Sponza->SubmitIndirect(submitParams);
     }
 
+    m_ShadowFrustumCuller->RestoreAfterIndirectDraw(cmdList);
+
     shadowTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_CSM_END);
     PIXEndEvent(cmdList);
 } // ShadowPass
 
 void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(255, 100, 0), L"Occlusion Culling Phase 2");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_OCCLUSION_PHASE2_BEGIN);
 
     auto hizTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_HIZ_DEPTH_RENDER_TEXTURE).get();
 
@@ -731,24 +879,25 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     }
 
     m_HierarchicalZBuffer->OnHiZ();
-    //m_OcclusionCuller->ReadbackToCPU(cmdList);
 
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_OCCLUSION_PHASE2_END);
     PIXEndEvent(cmdList);
 } // OcclusionPhase2Pass
 
 void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
+    using namespace SharedCommons;
     // 스폰자 씬 렌더링
     PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Sponza Indirect Render Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_BEGIN);
 
-    auto csmTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE);
+    auto csmTexture = m_RenderTextureManager->GetRenderTexture(KEY_SHADOW_MAP_RENDER_TEXTURE);
 
 
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
     submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
-    submitParams.shadowMapDescriptorIndex = m_RenderTextureManager->GetRenderTexture(
-        SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE)->GetSRVIndex();
+    submitParams.shadowMapDescriptorIndex = m_RenderTextureManager->GetRenderTexture(KEY_SHADOW_MAP_RENDER_TEXTURE)->GetSRVIndex();
     submitParams.csmShadowMapDescriptorIndex = csmTexture ? csmTexture->GetSRVIndex() : UINT_MAX;
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
@@ -758,10 +907,8 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
 
     m_Sponza->SubmitIndirect(submitParams);
 
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_END);
     PIXEndEvent(cmdList);
-
-    //m_RendererDebugger->DebugBoundingBox(cmdList);
-
 } // SponzaPass
 
 void Renderer::OnGUI() {
@@ -791,8 +938,28 @@ void Renderer::OnGUI() {
 
     ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "[ GPU PROFILING ]");
 
-    double passTime = m_GPUMonitor->GetTimeMs(0, 1);
-    ImGui::Text("Pass: %.3f ms", passTime);
-    ImGui::ProgressBar(static_cast<float>(passTime / 16.6), ImVec2(200.0f, 0.0f), "");
+    const double probeTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_PROBE_BEGIN, GPU_QUERY_PROBE_END);
+    const double frustumTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_FRUSTUM_BEGIN, GPU_QUERY_FRUSTUM_END);
+    const double shadowFrustumTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_SHADOW_FRUSTUM_BEGIN, GPU_QUERY_SHADOW_FRUSTUM_BEGIN);
+    const double occlusionPhase1Time = m_GPUMonitor->GetTimeMs(
+        GPU_QUERY_OCCLUSION_PHASE1_BEGIN, GPU_QUERY_OCCLUSION_PHASE1_END);
+    const double depthTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_DEPTH_BEGIN, GPU_QUERY_DEPTH_END);
+    const double hizTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_HIZ_BEGIN, GPU_QUERY_HIZ_END);
+    const double csmTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_CSM_BEGIN, GPU_QUERY_CSM_END);
+    const double occlusionPhase2Time = m_GPUMonitor->GetTimeMs(
+        GPU_QUERY_OCCLUSION_PHASE2_BEGIN, GPU_QUERY_OCCLUSION_PHASE2_END);
+    const double sceneTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_SCENE_BEGIN, GPU_QUERY_SCENE_END);
+    const double imguiTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_IMGUI_BEGIN, GPU_QUERY_IMGUI_END);
+
+    ImGui::Text("Probe: %.3f ms", probeTime);
+    ImGui::Text("Frustum: %.3f ms", frustumTime);
+    ImGui::Text("Shadow Frustum: %.3f ms", shadowFrustumTime);
+    ImGui::Text("Occlusion 1: %.3f ms", occlusionPhase1Time);
+    ImGui::Text("Depth: %.3f ms", depthTime);
+    ImGui::Text("Hi-Z: %.3f ms", hizTime);
+    ImGui::Text("CSM: %.3f ms", csmTime);
+    ImGui::Text("Occlusion 2: %.3f ms", occlusionPhase2Time);
+    ImGui::Text("Scene: %.3f ms", sceneTime);
+    ImGui::Text("ImGui: %.3f ms", imguiTime);
     ImGui::Separator();
 } // OnGUI

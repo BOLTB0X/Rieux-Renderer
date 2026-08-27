@@ -47,7 +47,7 @@ bool Texture::Init(ID3D12Device* device, ID3D12GraphicsCommandList* uploadCmdLis
 
 UINT Texture::GetSRVIndex() const {
     return m_srvIndex;
-} // GetSRVIndex
+} // GetSliceSRVIndex
 
 ID3D12Resource* Texture::GetResource() const {
     return m_resource.Get();

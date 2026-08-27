@@ -8,9 +8,9 @@ public:
     static const UINT MAX_CASCADES = 4;
 
     struct InitParams {
-        UINT cascadeCount;   // 보통 4
-        UINT shadowMapSize;  // 텍셀 스냅 계산용 (예: 2048)
-        float splitLambda;   // log/uniform 블렌드 비율 (0.5 권장)
+        UINT cascadeCount;
+        UINT shadowMapSize;
+        float splitLambda;
 
         InitParams() : cascadeCount(4), shadowMapSize(2048), splitLambda(0.5f) {
         }
@@ -40,9 +40,15 @@ public:
     void Frame(const FrameParams&);
 
 public:
-    UINT                      GetCascadeCount() const;
-    DirectX::XMMATRIX         GetCascadeViewProj(UINT) const;
-    const DirectX::XMFLOAT4&  GetSplitDistances() const;
+    UINT                                                GetCascadeCount() const;
+    DirectX::XMMATRIX                                   GetCascadeView(UINT) const;
+    DirectX::XMMATRIX                                   GetCascadeProj(UINT) const;
+    DirectX::XMMATRIX                                   GetCascadeViewProj(UINT) const;
+    bool                                                GetCascadeDirty(UINT) const;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES>         GetCascadeView() const;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES>         GetCascadeProj() const;
+    const DirectX::XMFLOAT4&                            GetSplitDistances() const;
+    bool                                                IsDirty() const;
 
 private:
     void ComputeSplits(const float&, const float&);
@@ -54,13 +60,25 @@ private:
         { 1.0f,  1.0f, 0.0f }, { -1.0f,  1.0f, 0.0f },
         { -1.0f, -1.0f, 1.0f }, { 1.0f, -1.0f, 1.0f },
         { 1.0f,  1.0f, 1.0f }, { -1.0f,  1.0f, 1.0f }
-    };
+    }; // ndcCorners
 
 private:
     float                                       m_splitLambda;
-    std::array<float, MAX_CASCADES + 1>         m_splitDepths;       // 뷰공간 거리 (N+1개 경계)
+    std::array<float, MAX_CASCADES + 1>         m_splitDepths;
     std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeViewProj;
-    DirectX::XMFLOAT4                           m_splitDistancesOut; // 셰이더로 넘길 4개 값
+    std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeView;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeProj;
+    std::array<DirectX::XMFLOAT2, MAX_CASCADES> m_prevSnappedOrigin;
+    std::array<float, MAX_CASCADES>             m_prevOrthoSize;
+    std::array<bool, MAX_CASCADES>              m_cascadeDirty;
+
+    DirectX::XMFLOAT4                           m_splitDistancesOut;
     UINT                                        m_cascadeCount;
     UINT                                        m_shadowMapSize;
+    DirectX::XMFLOAT4X4                         m_prevCameraView;
+    DirectX::XMFLOAT3                           m_prevLightDir;
+    float                                       m_prevFov;
+    float                                       m_prevNearZ;
+    float                                       m_prevFarZ;
+    bool                                        m_isDirty;
 }; // CascadedShadowMap

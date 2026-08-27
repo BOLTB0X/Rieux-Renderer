@@ -9,6 +9,8 @@
 // D3D12
 #include "D3D12PipelineState.h"
 #include "D3D12RootSignature.h"
+// Tools
+#include "RootSignatureBuilder.h"
 
 class PSOManager {
 public:
@@ -34,19 +36,21 @@ public:
     ID3D12RootSignature* GetID3D12RootSignature(const std::string&) const;
 
 private:
-    bool CreateRootSignature(const std::string&, const std::function<void(D3D12RootSignature::Builder&)>&);
+    bool CreateRootSignature(const std::string&, const std::function<void(RootSignatureBuilder&)>&);
     UINT GetRootParamIndex(const std::string&, const std::string&) const;
 
 private:
     bool BuildDefaultSponza(const std::string&);
     bool BuildGPUDriven(const std::string&);
     bool BuildFrustumCullingCompute(const std::string&, const std::wstring&);
+    bool BuildShadowFrustumCullingCompute(const std::string&, const std::wstring&);
     bool BuildOcclusionCullingCompute(const std::string&, const std::wstring&);
 
     bool BuildDepthRecord(const std::string&);
 	bool BuildShadowRecord(const std::string&);
     bool BuildCascadedShadowRecord(const std::string&);
 	bool BuildHierarchicalZ(const std::string&);
+    bool BuildProbeCapture(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);

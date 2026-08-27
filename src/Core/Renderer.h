@@ -31,7 +31,9 @@ class RenderTexture;
 class RenderTextureManager;
 class Sponza;
 class RendererDebugger;
+class ShadowFrustumCuller;
 class CascadedShadowMap;
+class EnvironmentProbe;
 
 class Renderer {
 public:
@@ -55,6 +57,31 @@ public:
     void Shutdown();
 
 private:
+    enum GPUQueryIndex : uint32_t {
+        GPU_QUERY_PROBE_BEGIN = 0,
+        GPU_QUERY_PROBE_END,
+        GPU_QUERY_FRUSTUM_BEGIN,
+        GPU_QUERY_FRUSTUM_END,
+        GPU_QUERY_SHADOW_FRUSTUM_BEGIN,
+        GPU_QUERY_SHADOW_FRUSTUM_END,
+        GPU_QUERY_OCCLUSION_PHASE1_BEGIN,
+        GPU_QUERY_OCCLUSION_PHASE1_END,
+        GPU_QUERY_DEPTH_BEGIN,
+        GPU_QUERY_DEPTH_END,
+        GPU_QUERY_HIZ_BEGIN,
+        GPU_QUERY_HIZ_END,
+        GPU_QUERY_CSM_BEGIN,
+        GPU_QUERY_CSM_END,
+        GPU_QUERY_OCCLUSION_PHASE2_BEGIN,
+        GPU_QUERY_OCCLUSION_PHASE2_END,
+        GPU_QUERY_SCENE_BEGIN,
+        GPU_QUERY_SCENE_END,
+        GPU_QUERY_IMGUI_BEGIN,
+        GPU_QUERY_IMGUI_END,
+        GPU_QUERY_COUNT
+    };
+
+private:
     bool Render();
     bool LoadPipeline(HWND, int, int);
     bool LoadSceneRenderTarget(int, int);
@@ -64,7 +91,9 @@ private:
 private:
     void PopulateCommandList();
 
+    void ProbeCapturePass(ID3D12GraphicsCommandList*);
     void FrustumPass(ID3D12GraphicsCommandList*);
+    void ShadowFrustumPass(ID3D12GraphicsCommandList*);
     void DepthPass(ID3D12GraphicsCommandList*);
     void ShadowPass(ID3D12GraphicsCommandList*);
     void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
@@ -100,9 +129,11 @@ private:
     // Techniques 데이터
     // --------------------------------------------------
     std::unique_ptr<FrustumCuller>           m_FrustumCuller;
+    std::unique_ptr<ShadowFrustumCuller>     m_ShadowFrustumCuller;
     std::unique_ptr<HierarchicalZBuffer>     m_HierarchicalZBuffer;
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<CascadedShadowMap>       m_CascadedShadowMap;
+    std::unique_ptr<EnvironmentProbe>        m_EnvironmentProbe;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------

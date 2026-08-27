@@ -31,11 +31,14 @@ public:
         DescriptorHeapAllocator*         heapAllocator;
         DirectX::XMFLOAT3                aabbMin;
         DirectX::XMFLOAT3                aabbMax;
+        UINT                             shadowIndexCount;
+        UINT                             shadowStartIndex;
 
         InitParams() : device(nullptr), uploadCmdList(nullptr),
             vertices(nullptr), indices(nullptr), 
             materialIndex(0), name(""), heapAllocator(nullptr),
-            aabbMin(0.0f, 0.0f, 0.0f), aabbMax(0.0f, 0.0f, 0.0f) {
+            aabbMin(0.0f, 0.0f, 0.0f), aabbMax(0.0f, 0.0f, 0.0f),
+            shadowIndexCount(0), shadowStartIndex(0) {
         } // InitDefaultParams
     }; // InitDefaultParams
 
@@ -60,6 +63,8 @@ public:
     const std::string&             GetName() const;
     const DirectX::XMFLOAT3&       GetAABBMin() const;
     const DirectX::XMFLOAT3&       GetAABBMax() const;
+    UINT                           GetShadowIndexCount() const;
+    UINT                           GetShadowStartIndex() const;
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> m_vertexBuffer;
@@ -71,4 +76,6 @@ private:
     std::string                            m_name;
     DirectX::XMFLOAT3                      m_aabbMin;
     DirectX::XMFLOAT3                      m_aabbMax;
+    UINT                                   m_shadowIndexCount;
+    UINT                                   m_shadowStartIndex;
 }; // PBRMesh 

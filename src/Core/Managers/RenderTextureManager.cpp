@@ -102,7 +102,7 @@ bool RenderTextureManager::Init(const InitParams& params) {
 
 std::shared_ptr<RenderTexture> RenderTextureManager::CreateRenderTexture(
     const std::string& name, UINT width, UINT height,
-    RenderTexture::RenderTextureType type, DXGI_FORMAT format, UINT mipLevels) {
+    RenderTexture::RenderTextureType type, DXGI_FORMAT format, UINT mipLevels, UINT arraySize, bool isCubeMap) {
 
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -123,6 +123,8 @@ std::shared_ptr<RenderTexture> RenderTextureManager::CreateRenderTexture(
     texParams.format = format;
     texParams.type = type;
     texParams.mipLevels = mipLevels;
+    texParams.arraySize = arraySize;
+    texParams.isCubeMap = isCubeMap;
 
     if (!renderTexture->Init(texParams)) {
         DebugPrint("RenderTexture 생성 실패: " + name);
@@ -145,18 +147,29 @@ void RenderTextureManager::OnGUI() {
 
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& [name, tex] : m_renderTextures) {
-        if (!tex || tex->GetType() != RenderTexture::RenderTextureType::Normal) continue;
-
+        if (!tex) continue;
         UINT srvIndex = tex->GetSRVIndex();
         if (srvIndex == UINT_MAX) continue;
 
-        ImGui::Text("%s (%ux%u)", name.c_str(), tex->GetWidth(), tex->GetHeight());
-
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(srvIndex);
-
         float aspect = static_cast<float>(tex->GetHeight()) / static_cast<float>(tex->GetWidth());
         float previewWidth = 320.0f;
-        ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
-        ImGui::Spacing();
+        if (tex->IsCubeMap()) {
+            ImGui::Text("%s (%ux%u, %u faces)", name.c_str(), tex->GetWidth(), tex->GetHeight(), tex->GetArraySize());
+            for (UINT face = 0; face < tex->GetArraySize(); ++face) {
+                UINT faceSrvIndex = tex->GetSliceSRVIndex(face);
+                if (faceSrvIndex == UINT_MAX) continue;
+
+                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(faceSrvIndex);
+                ImGui::Text("Face %u", face);
+                ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
+                ImGui::Spacing();
+            }
+        }
+        else {
+            ImGui::Text("%s (%ux%u)", name.c_str(), tex->GetWidth(), tex->GetHeight());
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(srvIndex);
+            ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
+            ImGui::Spacing();
+        }
     }
 } // OnGUI

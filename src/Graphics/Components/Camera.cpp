@@ -46,7 +46,6 @@ void Camera::UpdateProjection() {
     float fovRadian = XMConvertToRadians(m_fov);
     m_projectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_far, m_near);
     m_cullingProjectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_near, m_far);
-    //m_projectionMatrix = XMMatrixPerspectiveFovLH(fovRadian, m_aspect, m_near, m_far);
 } // UpdateProjection
 
 void Camera::Frame(float moveForward, float moveRight, float moveUp, float rotationDeltaX, float rotationDeltaY, float zoomDelta) {
