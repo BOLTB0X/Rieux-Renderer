@@ -43,7 +43,7 @@ namespace SharedCommons {
     static constexpr float SHADOW_BIAS = 0.0012f;
     static constexpr float SHADOW_SPREAD = 1.0f;
     static constexpr UINT  CASCADES_COUNT = 4;
-    static constexpr float SPLIT_LAMBDA = 0.65f;
+    static constexpr float SPLIT_LAMBDA = 0.5f;
 
     ///////////////////////////////////////////////////////////////////////////////////////
 
@@ -73,13 +73,15 @@ namespace SharedCommons {
     static const std::string  GPU_SPONZA_VS_STR = "GPUSponzaVS";
     static const std::string  GPU_SPONZA_PS_STR = "GPUSponzaPS";
 
-    static const std::wstring CULLING_CS = L"HLSL/FrustumCullingCS.hlsl";
-    static const std::string  CULLING_CS_STR = "FrustumCullingCS";
+    static const std::wstring FRUSTUM_CULLING_CS = L"HLSL/FrustumCullingCS.hlsl";
+    static const std::string  FRUSTUM_CULLING_CS_STR = "FrustumCullingCS";
+
+    static const std::wstring SHADOW_FRUSTUM_CULLING_CS = L"HLSL/ShadowFrustumCullingCS.hlsl";
+    static const std::string  SHADOW_FRUSTUM_CULLING_CS_STR = "ShadowFrustumCullingCS";
 
     static const std::wstring DEPTH_VS = L"HLSL/DepthVS.hlsl";
     static const std::wstring SHADOW_VS = L"HLSL/ShadowVS.hlsl";
     static const std::wstring DEPTH_PS = L"HLSL/DepthPS.hlsl";
-
 
     static const std::string  DEPTH_VS_STR = "DepthVS";
     static const std::string  SHADOW_VS_STR = "ShadowVS";
@@ -134,8 +136,10 @@ namespace SharedCommons {
     static const std::string  KEY_GPU_SPONZA_WIRE_CULL = "GPUSponza_WIRE_CULL";
     static const std::string  KEY_GPU_SPONZA_WIRE_NO_CULL = "GPUSponza_WIRE_NOCULL";
 
-    static const std::string  KEY_CULLING_CS = "FrustumCullingCS";
-    static const std::string  KEY_CULLING_SIG = "FrustumCullingCS_SIG";
+    static const std::string  KEY_FRUSTUM_CULLING_CS = "FrustumCullingCS";
+    static const std::string  KEY_SHADOW_FRUSTUM_CULLING_CS = "ShadowFrustumCullingCS";
+    static const std::string  KEY_FRUSTUM_CULLING_SIG = "FrustumCullingCS_SIG";
+    static const std::string  KEY_SHADOW_FRUSTUM_CULLING_SIG = "ShadowFrustumCullingCS_SIG";
 
     static const std::string  KEY_GPU_DEPTH_SOLID_CULL = "GPU_DEPTH_SOLID_CULL";
     static const std::string  KEY_GPU_DEPTH_ALPHA_NO_CULL = "GPU_DEPTH_ALPHA_NO_CULL";

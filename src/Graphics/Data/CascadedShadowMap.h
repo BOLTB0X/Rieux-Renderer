@@ -40,11 +40,15 @@ public:
     void Frame(const FrameParams&);
 
 public:
-    UINT                      GetCascadeCount() const;
-    DirectX::XMMATRIX         GetCascadeView(UINT) const;
-    DirectX::XMMATRIX         GetCascadeProj(UINT) const;
-    DirectX::XMMATRIX         GetCascadeViewProj(UINT) const;
-    const DirectX::XMFLOAT4&  GetSplitDistances() const;
+    UINT                                                GetCascadeCount() const;
+    DirectX::XMMATRIX                                   GetCascadeView(UINT) const;
+    DirectX::XMMATRIX                                   GetCascadeProj(UINT) const;
+    DirectX::XMMATRIX                                   GetCascadeViewProj(UINT) const;
+    bool                                                GetCascadeDirty(UINT) const;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES>         GetCascadeView() const;
+    std::array<DirectX::XMMATRIX, MAX_CASCADES>         GetCascadeProj() const;
+    const DirectX::XMFLOAT4&                            GetSplitDistances() const;
+    bool                                                IsDirty() const;
 
 private:
     void ComputeSplits(const float&, const float&);
@@ -56,7 +60,7 @@ private:
         { 1.0f,  1.0f, 0.0f }, { -1.0f,  1.0f, 0.0f },
         { -1.0f, -1.0f, 1.0f }, { 1.0f, -1.0f, 1.0f },
         { 1.0f,  1.0f, 1.0f }, { -1.0f,  1.0f, 1.0f }
-    };
+    }; // ndcCorners
 
 private:
     float                                       m_splitLambda;
@@ -64,7 +68,17 @@ private:
     std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeViewProj;
     std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeView;
     std::array<DirectX::XMMATRIX, MAX_CASCADES> m_cascadeProj;
+    std::array<DirectX::XMFLOAT2, MAX_CASCADES> m_prevSnappedOrigin;
+    std::array<float, MAX_CASCADES>             m_prevOrthoSize;
+    std::array<bool, MAX_CASCADES>              m_cascadeDirty;
+
     DirectX::XMFLOAT4                           m_splitDistancesOut;
     UINT                                        m_cascadeCount;
     UINT                                        m_shadowMapSize;
+    DirectX::XMFLOAT4X4                         m_prevCameraView;
+    DirectX::XMFLOAT3                           m_prevLightDir;
+    float                                       m_prevFov;
+    float                                       m_prevNearZ;
+    float                                       m_prevFarZ;
+    bool                                        m_isDirty;
 }; // CascadedShadowMap

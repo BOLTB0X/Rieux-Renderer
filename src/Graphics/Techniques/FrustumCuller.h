@@ -16,11 +16,10 @@ public:
         ID3D12RootSignature*     rootSig;
         ID3D12PipelineState*     pso;
         DescriptorHeapAllocator* heapAllocator;
-        bool                     isOrthographic;
 
 		InitParams() : device(nullptr),
             maxMainCount(0), maxVaseCount(0),
-            rootSig(nullptr), pso(nullptr), heapAllocator(nullptr), isOrthographic(false) {
+            rootSig(nullptr), pso(nullptr), heapAllocator(nullptr) {
         }
     }; // InitParams
 

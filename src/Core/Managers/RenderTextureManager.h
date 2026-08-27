@@ -4,8 +4,8 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
-
-#include "D3D12/RenderTexture.h"
+// Graphics
+#include "RenderTexture.h"
 
 class DescriptorHeapAllocator;
 

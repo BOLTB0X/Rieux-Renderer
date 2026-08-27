@@ -71,6 +71,28 @@ public: // Screen
     static UINT OcclusionCulledMainCountIndex;
     static UINT OcclusionCulledVaseCountIndex;
 
+    static UINT ShadowCullingDataIndex;
+    static UINT ShadowCullingMasterInstanceIndex;
+    static UINT ShadowCullingMasterCommandsIndex;
+    static UINT ShadowCullingVisibleCommandsCascade0Index;
+    static UINT ShadowCullingVisibleCommandsCascade1Index;
+    static UINT ShadowCullingVisibleCommandsCascade2Index;
+    static UINT ShadowCullingVisibleCommandsCascade3Index;
+    static UINT ShadowCullingDrawCountsIndex;
+
+    static UINT ShadowCullingMainVisibleCommandsCascade0Index;
+    static UINT ShadowCullingMainVisibleCommandsCascade1Index;
+    static UINT ShadowCullingMainVisibleCommandsCascade2Index;
+    static UINT ShadowCullingMainVisibleCommandsCascade3Index;
+
+    static UINT ShadowCullingVaseVisibleCommandsCascade0Index;
+    static UINT ShadowCullingVaseVisibleCommandsCascade1Index;
+    static UINT ShadowCullingVaseVisibleCommandsCascade2Index;
+    static UINT ShadowCullingVaseVisibleCommandsCascade3Index;
+
+    static UINT ShadowCullingMainDrawCountsIndex;
+    static UINT ShadowCullingVaseDrawCountsIndex;
+
     static UINT CascadeIndexConstant;
     static UINT CSMShadowMapIndex;
 

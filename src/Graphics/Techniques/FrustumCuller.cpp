@@ -42,7 +42,7 @@ bool FrustumCuller::Init(const InitParams& params) {
     m_computePSO = params.pso;
     m_heapAllocator = params.heapAllocator;
 
-    m_frustum->Init(RendererState::ScreenDepth, params.isOrthographic);
+    m_frustum->Init(RendererState::ScreenDepth, false);
     BuildBuffers(params.device);
     return true;
 } // Init

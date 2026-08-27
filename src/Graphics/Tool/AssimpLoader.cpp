@@ -188,6 +188,8 @@ std::unique_ptr<PBRMesh> AssimpLoader::ProcessMesh(aiMesh* mesh, const aiScene* 
     meshParams.name = mesh->mName.C_Str();
     meshParams.aabbMin = finalAabbMin;
     meshParams.aabbMax = finalAabbMax;
+    meshParams.shadowIndexCount = static_cast<UINT>(indices.size());
+    meshParams.shadowStartIndex = 0;
 
     ComPtr<ID3D12Resource> vbUpload;
     ComPtr<ID3D12Resource> ibUpload;

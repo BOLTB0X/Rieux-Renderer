@@ -60,6 +60,28 @@ UINT  RendererState::OcclusionPhaseIndex = 25;
 UINT  RendererState::CascadeIndexConstant = 26;
 UINT  RendererState::CSMShadowMapIndex = 27;
 
+UINT RendererState::ShadowCullingDataIndex = 28;
+UINT RendererState::ShadowCullingMasterInstanceIndex = 29;
+UINT RendererState::ShadowCullingMasterCommandsIndex = 30;
+UINT RendererState::ShadowCullingVisibleCommandsCascade0Index = 31;
+UINT RendererState::ShadowCullingVisibleCommandsCascade1Index = 32;
+UINT RendererState::ShadowCullingVisibleCommandsCascade2Index = 33;
+UINT RendererState::ShadowCullingVisibleCommandsCascade3Index = 34;
+UINT RendererState::ShadowCullingDrawCountsIndex = 35;
+
+UINT RendererState::ShadowCullingMainVisibleCommandsCascade0Index = 36;
+UINT RendererState::ShadowCullingMainVisibleCommandsCascade1Index = 37;
+UINT RendererState::ShadowCullingMainVisibleCommandsCascade2Index = 38;
+UINT RendererState::ShadowCullingMainVisibleCommandsCascade3Index = 39;
+
+UINT RendererState::ShadowCullingVaseVisibleCommandsCascade0Index = 36;
+UINT RendererState::ShadowCullingVaseVisibleCommandsCascade1Index = 37;
+UINT RendererState::ShadowCullingVaseVisibleCommandsCascade2Index = 38;
+UINT RendererState::ShadowCullingVaseVisibleCommandsCascade3Index = 39;
+
+UINT RendererState::ShadowCullingMainDrawCountsIndex = 38;
+UINT RendererState::ShadowCullingVaseDrawCountsIndex = 39;
+
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 

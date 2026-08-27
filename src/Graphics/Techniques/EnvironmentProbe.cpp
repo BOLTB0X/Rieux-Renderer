@@ -9,7 +9,6 @@
 
 using namespace DirectX;
 
-// 큐브맵 6면 방향 (D3D 표준 순서: +X -X +Y -Y +Z -Z)
 static const XMVECTOR kFaceForward[6] = {
     XMVectorSet(1, 0, 0, 0), XMVectorSet(-1, 0, 0, 0),
     XMVectorSet(0, 1, 0, 0), XMVectorSet(0,-1, 0, 0),
@@ -23,8 +22,10 @@ static const XMVECTOR kFaceUp[6] = {
 };
 
 EnvironmentProbe::EnvironmentProbe()
-    : m_position(0, 0, 0), m_faceSize(256), m_isDirty(true),
-    m_cubemapTexture(nullptr), m_depthTexture(nullptr), m_faceViewMatrices{}, m_faceProjMatrix(XMMatrixIdentity()),
+    : m_position(0, 0, 0), m_prevCameraPos(0, 0, 0), m_prevCameraDir(0, 0, 0),
+    m_faceSize(256), m_isDirty(true),
+    m_cubemapTexture(nullptr), m_depthTexture(nullptr),
+    m_faceViewMatrices{}, m_faceProjMatrix(XMMatrixIdentity()),
     m_mappedFaceFrameCB{} {
 } // EnvironmentProbe
 
@@ -36,16 +37,6 @@ EnvironmentProbe::~EnvironmentProbe() {
 
 bool EnvironmentProbe::Init(const InitParams& params) {
     m_faceSize = params.faceSize;
-
-    RenderTexture::InitParams texParams;
-    texParams.device = params.device;
-    texParams.sharedDescriptorAllocator = params.sharedDescriptorAllocator;
-    texParams.width = m_faceSize;
-    texParams.height = m_faceSize;
-    texParams.arraySize = FACE_COUNT;
-    texParams.format = params.format;
-    texParams.type = RenderTexture::RenderTextureType::Normal;
-    texParams.isCubeMap = true;
 
     auto tex = params.renderTextureManager->CreateRenderTexture(
         "EnvironmentProbe_Cubemap", m_faceSize, m_faceSize,
@@ -61,7 +52,6 @@ bool EnvironmentProbe::Init(const InitParams& params) {
 
     m_faceProjMatrix = XMMatrixPerspectiveFovLH(XM_PIDIV2, 1.0f, 0.1f, 4000.0f);
 
-    // 면별 FrameCB 업로드 버퍼 6개 생성
     CD3DX12_HEAP_PROPERTIES uploadHeap(D3D12_HEAP_TYPE_UPLOAD);
     const UINT cbSize = (sizeof(GPUCommons::FrameCB) + 255) & ~255;
     CD3DX12_RESOURCE_DESC cbDesc = CD3DX12_RESOURCE_DESC::Buffer(cbSize);
@@ -78,9 +68,29 @@ bool EnvironmentProbe::Init(const InitParams& params) {
     return true;
 } // Init
 
+void EnvironmentProbe::Frame(const FrameParams& param) {
+    m_isDirty = false;
+
+    const float posThreshold = 0.001f;
+    const float dirThreshold = 0.001f;
+
+    bool posChanged = (fabsf(param.cameraPos.x - m_prevCameraPos.x) > posThreshold) ||
+        (fabsf(param.cameraPos.y - m_prevCameraPos.y) > posThreshold) ||
+        (fabsf(param.cameraPos.z - m_prevCameraPos.z) > posThreshold);
+
+    if (posChanged) {
+        m_isDirty = true;
+        SetPosition(param.cameraPos);
+
+        m_prevCameraPos = param.cameraPos;
+        m_prevCameraDir = param.cameraDir;
+
+        UpdateFaceMatrices();
+    }
+} // Frame
+
 void EnvironmentProbe::SetPosition(const XMFLOAT3& pos) {
     m_position = pos;
-    m_isDirty = true;
 } // SetPosition
 
 void EnvironmentProbe::UpdateFaceMatrices() {
