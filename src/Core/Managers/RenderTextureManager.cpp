@@ -97,6 +97,30 @@ bool RenderTextureManager::Init(const InitParams& params) {
 
     m_renderTextures[SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE] = shadowTex;
 
+    auto gbuffer0 = std::make_shared<RenderTexture>();
+    RenderTexture::InitParams gb0Params;
+    gb0Params.device = m_device;
+    gb0Params.rtvAllocator = m_rtvAllocator.get();
+    gb0Params.sharedDescriptorAllocator = m_sharedDescriptorAllocator;
+    gb0Params.width = SharedCommons::SCREEN_WIDTH;
+    gb0Params.height = SharedCommons::SCREEN_HEIGHT;
+    gb0Params.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    gb0Params.type = RenderTexture::RenderTextureType::Normal;
+    if (!gbuffer0->Init(gb0Params)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_GBUFFER0_RENDER_TEXTURE);
+        return false;
+    }
+    m_renderTextures[SharedCommons::KEY_GBUFFER0_RENDER_TEXTURE] = gbuffer0;
+
+    auto gbuffer1 = std::make_shared<RenderTexture>();
+    RenderTexture::InitParams gb1Params = gb0Params;
+    gb1Params.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    if (!gbuffer1->Init(gb1Params)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE);
+        return false;
+    }
+    m_renderTextures[SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE] = gbuffer1;
+
     return true;
 } // Init
 
@@ -144,7 +168,6 @@ void RenderTextureManager::OnGUI() {
     ImGui::TextColored(ImVec4(0.8f, 1.0f, 0.6f, 1.0f), "[ Render Textures ]");
     ImGui::Separator();
 
-
     std::lock_guard<std::mutex> lock(m_mutex);
     for (const auto& [name, tex] : m_renderTextures) {
         if (!tex) continue;
@@ -153,17 +176,33 @@ void RenderTextureManager::OnGUI() {
 
         float aspect = static_cast<float>(tex->GetHeight()) / static_cast<float>(tex->GetWidth());
         float previewWidth = 320.0f;
-        if (tex->IsCubeMap()) {
-            ImGui::Text("%s (%ux%u, %u faces)", name.c_str(), tex->GetWidth(), tex->GetHeight(), tex->GetArraySize());
-            for (UINT face = 0; face < tex->GetArraySize(); ++face) {
-                UINT faceSrvIndex = tex->GetSliceSRVIndex(face);
-                if (faceSrvIndex == UINT_MAX) continue;
 
-                D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(faceSrvIndex);
-                ImGui::Text("Face %u", face);
-                ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
-                ImGui::Spacing();
-            }
+        if (tex->IsCubeMap()) {
+            ImGui::Text("%s (%ux%u, %u faces, %u mips)", name.c_str(), tex->GetWidth(), tex->GetHeight(),
+                tex->GetArraySize(), tex->GetMipLevels());
+
+            for (UINT face = 0; face < tex->GetArraySize(); ++face) {
+                if (tex->GetMipLevels() > 1) {
+                    for (UINT mip = 0; mip < tex->GetMipLevels(); ++mip) {
+                        UINT mipFaceSrvIndex = tex->GetMipFaceSRVIndex(mip, face);
+                        if (mipFaceSrvIndex == UINT_MAX) continue;
+
+                        UINT mipSize = tex->GetWidth() >> mip;
+                        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(mipFaceSrvIndex);
+                        ImGui::Text("Face %u / Mip %u (%ux%u)", face, mip, mipSize, mipSize);
+                        ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
+                        ImGui::Spacing();
+                    } //  for (UINT mip = 0; mip < tex->GetMipLevels(); ++mip)
+                }
+                else {
+                    UINT faceSrvIndex = tex->GetSliceSRVIndex(face);
+                    if (faceSrvIndex == UINT_MAX) continue;
+                    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = m_sharedDescriptorAllocator->GetGPUHandle(faceSrvIndex);
+                    ImGui::Text("Face %u", face);
+                    ImGui::Image((ImTextureID)gpuHandle.ptr, ImVec2(previewWidth, previewWidth * aspect));
+                    ImGui::Spacing();
+                }
+            } // for (UINT face = 0; face < tex->GetArraySize(); ++face)
         }
         else {
             ImGui::Text("%s (%ux%u)", name.c_str(), tex->GetWidth(), tex->GetHeight());

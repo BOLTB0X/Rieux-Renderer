@@ -89,6 +89,21 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
+    if (!BuildGBuffer(SharedCommons::KEY_GPU_SPONZA_SIG)) {
+        DebugHelper::DebugPrint("BuildGBuffer PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildBRDFIntegrationCompute(SharedCommons::KEY_BRDF_INTEGRATION_SIG,SharedCommons::BRDF_INTEGRATION_CS)) {
+        DebugHelper::DebugPrint("BRDF Integration PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildPrefilterEnvironmentCompute(SharedCommons::KEY_PREFILTER_ENVIRONMENT_SIG,SharedCommons::PREFILTER_ENVIRONMENT_CS)) {
+        DebugHelper::DebugPrint("Prefilter Environment PSO 빌드 실패");
+        return false;
+    }
+
     return true;
 } // Init
 
@@ -481,6 +496,108 @@ bool PSOManager::BuildOcclusionCullingCompute(const std::string& signatureKey, c
     return true;
 } // BuildOcclusionCullingCompute
 
+bool PSOManager::BuildBRDFIntegrationCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
+    if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
+        b.AddCBV("BRDF_LUT_CB", 0, D3D12_SHADER_VISIBILITY_ALL) // b0
+            .AddUAVTable("BRDFLUT", 0, D3D12_SHADER_VISIBILITY_ALL); // u0
+        })) {
+        return false;
+    }
+
+    RendererState::BRDFLUTConstantBufferIndex = GetRootParamIndex(signatureKey, "BRDF_LUT_CB");
+    RendererState::BRDFLUTIndex = GetRootParamIndex(signatureKey, "BRDFLUT");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (BRDF Integration): " + signatureKey);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> csBlob;
+    if (!ShaderHelper::InitComputeShader(shaderPath, csBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::BRDF_INTEGRATION_CS_STR] = csBlob;
+
+    D3D12PipelineState::ComputeInitParams computeParams;
+    computeParams.device = m_device;
+    computeParams.rootSignature = rootSignature;
+    computeParams.computeShader =
+        CD3DX12_SHADER_BYTECODE(
+            csBlob->GetBufferPointer(),
+            csBlob->GetBufferSize());
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+
+    if (!pso->InitCompute(computeParams)) {
+        DebugHelper::DebugPrint("BRDF Integration Compute PSO Init 실패");
+        return false;
+    }
+
+    m_psoMap[SharedCommons::KEY_BRDF_INTEGRATION_PSO] = std::move(pso);
+
+    return true;
+} // BuildBRDFIntegrationCompute
+
+bool PSOManager::BuildPrefilterEnvironmentCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
+    if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
+        b.AddConstants("PrefilterCB", /*레지스터*/ 0, /*32bit 값 개수*/ 4, D3D12_SHADER_VISIBILITY_ALL)
+            .AddSRVTable("SourceCubemap", 0, D3D12_SHADER_VISIBILITY_ALL) // t0
+            .AddUAVTable("OutputMipFace", 0, D3D12_SHADER_VISIBILITY_ALL) // u0
+            .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                D3D12_SHADER_VISIBILITY_ALL);
+        })) {
+        return false;
+    }
+
+    RendererState::PrefilterConstantBufferIndex = GetRootParamIndex(signatureKey, "PrefilterCB");
+    RendererState::SourceCubemapIndex = GetRootParamIndex(signatureKey, "SourceCubemap");
+    RendererState::OutputMipFaceIndex = GetRootParamIndex(signatureKey, "OutputMipFace");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+
+    if (!rootSignature) {
+        DebugHelper::DebugPrint(
+            "루트 시그니처 조회 실패 (Prefilter Environment): " +
+            signatureKey);
+
+        return false;
+    }
+
+    ComPtr<IDxcBlob> csBlob;
+
+    if (!ShaderHelper::InitComputeShader(
+        shaderPath,
+        csBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::PREFILTER_ENVIRONMENT_CS_STR] = csBlob;
+
+    D3D12PipelineState::ComputeInitParams computeParams;
+    computeParams.device = m_device;
+    computeParams.rootSignature = rootSignature;
+    computeParams.computeShader =CD3DX12_SHADER_BYTECODE(
+            csBlob->GetBufferPointer(),
+            csBlob->GetBufferSize());
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+
+    if (!pso->InitCompute(computeParams)) {
+        DebugHelper::DebugPrint(
+            "Prefilter Environment Compute PSO Init 실패");
+
+        return false;
+    }
+
+    m_psoMap[SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO] =
+        std::move(pso);
+
+    return true;
+} // BuildPrefilterEnvironmentCompute
+
 bool PSOManager::BuildDepthRecord(const std::string& signatureKey) {
     ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
     if (!rootSignature) {
@@ -706,6 +823,38 @@ bool PSOManager::BuildProbeCapture(const std::string& signatureKey) {
     return result;
 } // BuildProbeCapture
 
+bool PSOManager::BuildGBuffer(const std::string& signatureKey) {
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) return false;
+
+    ComPtr<IDxcBlob> vsBlob, psBlob;
+    if (!ShaderHelper::InitVertexShader(SharedCommons::GPU_PBR_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::GBUFFER_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+    m_shaderBlobs[SharedCommons::GBUFFER_PS_STR] = psBlob;
+
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { nullptr, 0 };
+    baseParams.numRenderTargets = 2; // MRT
+    baseParams.rtvFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    baseParams.rtvFormats[1] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    baseParams.dsvFormat = m_dsvFormat;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    baseParams.depthStencilState.DepthEnable = TRUE;
+    baseParams.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO; // 쓰기 안 함 - Phase1 결과 재사용
+    baseParams.depthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;      // Phase1 깊이와 일치하는 픽셀만
+
+    bool result = true;
+    result &= BuildSolidCullBack(SharedCommons::KEY_GBUFFER_SOLID_CULL, baseParams);
+    result &= BuildSolidCullNone(SharedCommons::KEY_GBUFFER_ALPHA_NO_CULL, baseParams);
+    return result;
+} // BuildGBuffer
+
 bool PSOManager::BuildDebugTransReverseZ(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
         b.AddConstants("CameraClipCB", 0, 2, D3D12_SHADER_VISIBILITY_PIXEL)      // b0: g_Near, g_Far (32-bit 값 2개)
@@ -736,7 +885,6 @@ bool PSOManager::BuildDebugTransReverseZ(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::FULLSCREEN_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::LINEAR_Z_TRANS_PS_STR] = psBlob;
 
-    // PSO (Pipeline State Object) 파라미터 세팅
     D3D12PipelineState::DefaultInitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;

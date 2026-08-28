@@ -26,7 +26,8 @@ public:
     void MoveLeftRight(float);
     void MoveUpDown(float);
 
-    // Setter & Getter
+public:
+    // Setter
     void  SetPosition(const DirectX::XMFLOAT3&);
     void  SetPosition(float, float, float);
     void  SetRotation(const DirectX::XMFLOAT3&);
@@ -36,6 +37,7 @@ public:
     void  SetNear(float);
     void  SetFar(float);
 
+public: // Getter
     float             GetFov() const;
     float             GetNear() const;
     float             GetFar() const;

@@ -91,7 +91,6 @@ void Camera::Update() {
     XMVECTOR lookAt = pos + m_forward;
     m_viewMatrix = XMMatrixLookAtLH(pos, lookAt, m_upVector);
     UpdateProjection();
-    // 절두체 업데이트
 } // Update
 
 void Camera::OnGUI() {

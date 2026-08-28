@@ -18,6 +18,8 @@
 #include "RenderTarget.h"
 // Graphics/Data
 #include "CascadedShadowMap.h"
+#include "BRDFIntegrationLUT.h"
+#include "PrefilterEnvironment.h"
 // Components
 #include "RenderQueue.h"
 #include "Camera.h"
@@ -60,6 +62,8 @@ Renderer::Renderer() {
     m_OcclusionCuller = std::make_unique<OcclusionCuller>();
     m_CascadedShadowMap = std::make_unique<CascadedShadowMap>();
     m_EnvironmentProbe = std::make_unique<EnvironmentProbe>();
+    m_BRDFIntegrationLUT = std::make_unique<BRDFIntegrationLUT>();
+    m_PrefilterEnvironment = std::make_unique<PrefilterEnvironment>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -250,6 +254,9 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     envFrameParams.cameraPos = m_SceneCamera->GetPosition();
     envFrameParams.cameraDir = m_SceneCamera->GetRotation();
     m_EnvironmentProbe->Frame(envFrameParams);
+    if (m_PrefilterEnvironment && !m_PrefilterEnvironment->IsGenerated()) {
+        m_EnvironmentProbe->MarkDirty();
+    }
 
     return Render();
 } // Frame
@@ -380,17 +387,7 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
         return false;
     }
 
-    EnvironmentProbe::InitParams envInit;
-    envInit.device = device;
-    envInit.renderTextureManager = m_RenderTextureManager.get();
-    envInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
-    envInit.faceSize = 256;
-    envInit.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    if (!m_EnvironmentProbe->Init(envInit)) {
-        DebugHelper::DebugPrint("m_EnvironmentProbe 초기화 실패");
-        return false;
-    }
-
+   
     return true;
 } // LoadSceneRenderTarget
 
@@ -437,6 +434,8 @@ bool Renderer::LoadAssets(HWND hwnd) {
     sponzaInitParams.psoCSMAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_CSM_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoProbeSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_PROBE_SOLID_CULL)->GetPSO();
     sponzaInitParams.psoProbeAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GPU_PROBE_ALPHA_NO_CULL)->GetPSO();
+    sponzaInitParams.psoGBufferSolid = m_PSOManager->GetPSO(SharedCommons::KEY_GBUFFER_SOLID_CULL)->GetPSO();
+    sponzaInitParams.psoGBufferAlpha = m_PSOManager->GetPSO(SharedCommons::KEY_GBUFFER_ALPHA_NO_CULL)->GetPSO();
     sponzaInitParams.psoDebug = m_PSOManager->GetPSO(SharedCommons::KEY_DEBUG_AABB_PSO)->GetPSO();
     if (!m_Sponza->Init(sponzaInitParams)) {
         DebugHelper::DebugPrint("Sponza 모델 초기화 실패");
@@ -502,6 +501,49 @@ bool Renderer::LoadAssets(HWND hwnd) {
         DebugHelper::DebugPrint("OcclusionCuller 초기화 실패");
         return false;
     }
+
+    EnvironmentProbe::InitParams envInit;
+    envInit.device = device;
+    envInit.renderTextureManager = m_RenderTextureManager.get();
+    envInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    envInit.faceSize = 256;
+    envInit.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    if (!m_EnvironmentProbe->Init(envInit)) {
+        DebugHelper::DebugPrint("m_EnvironmentProbe 초기화 실패");
+        return false;
+    }
+
+
+    PrefilterEnvironment::InitParams prefilterInit;
+    prefilterInit.device = device;
+    prefilterInit.rootSignature = m_PSOManager->GetID3D12RootSignature(
+        SharedCommons::KEY_PREFILTER_ENVIRONMENT_SIG);
+    prefilterInit.computePSO = m_PSOManager->GetPSO(
+        SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO)->GetPSO();
+    prefilterInit.renderTextureManager = m_RenderTextureManager.get();
+    prefilterInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    prefilterInit.sourceCubemap = m_EnvironmentProbe->GetCubemapTexture();
+    prefilterInit.outputSize = m_EnvironmentProbe->GetFaceSize();
+    prefilterInit.mipLevels = 5;
+    prefilterInit.sampleCount = 1024;
+    prefilterInit.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    if (!m_PrefilterEnvironment->Init(prefilterInit)) {
+        DebugHelper::DebugPrint("Prefilter Environment 초기화 실패");
+        return false;
+    }
+
+    BRDFIntegrationLUT::InitParams brdfInit;
+    brdfInit.device = device;
+    brdfInit.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_BRDF_INTEGRATION_SIG);
+    brdfInit.computePSO = m_PSOManager->GetPSO(SharedCommons::KEY_BRDF_INTEGRATION_PSO)->GetPSO();
+    brdfInit.renderTextureManager = m_RenderTextureManager.get();
+    brdfInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    brdfInit.format = DXGI_FORMAT_R16G16_FLOAT;
+    if (!m_BRDFIntegrationLUT->Init(brdfInit)) {
+        DebugHelper::DebugPrint("BRDF Integration LUT 초기화 실패");
+        return false;
+    }
     return true;
 } // LoadAssets
 
@@ -561,12 +603,20 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
 } // UpdateGUIs
 
 void Renderer::PopulateCommandList() {
-    m_CommandQueue->Reset();
+    if (!m_CommandQueue->Reset()) {
+        DebugHelper::DebugPrint("Command list를 열 수 없습니다.");
+        return;
+    }
+
     ID3D12GraphicsCommandList* cmdList = m_CommandQueue->GetList();
+    if (!cmdList) {
+        return;
+    }
 
     ID3D12DescriptorHeap* heaps[] = { m_sharedDescriptorAllocator->GetHeap() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
+    BRDFIntegrationPass(cmdList);
     ProbeCapturePass(cmdList);
 
     FrustumPass(cmdList);
@@ -586,6 +636,7 @@ void Renderer::PopulateCommandList() {
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
     SponzaPass(cmdList);
+    GBufferPass(cmdList);
 
     m_SceneRenderTarget->EndRender(cmdList);
 
@@ -632,8 +683,6 @@ void Renderer::PopulateCommandList() {
 void Renderer::ProbeCapturePass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(200, 200, 0), L"Environment Probe Capture");
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_BEGIN);
-
-    // 더티 체크 및 조기 반환
     if (!m_EnvironmentProbe->IsDirty()) {
         m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_END);
         PIXEndEvent(cmdList);
@@ -685,6 +734,12 @@ void Renderer::ProbeCapturePass(ID3D12GraphicsCommandList* cmdList) {
 
     cubemap->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     probeDepth->Transition(cmdList, D3D12_RESOURCE_STATE_COMMON);
+
+    if (m_PrefilterEnvironment) {
+        m_PrefilterEnvironment->Invalidate();
+        m_PrefilterEnvironment->Generate(cmdList);
+    }
+
     m_EnvironmentProbe->ClearDirty();
 
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_PROBE_END);
@@ -710,12 +765,11 @@ void Renderer::FrustumPass(ID3D12GraphicsCommandList* cmdList) {
 
 void Renderer::ShadowFrustumPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(180, 80, 200), L"Shadow Frustum Culling Pass");
-
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_BEGIN);
 
     if (!m_CascadedShadowMap->IsDirty()) {
-        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_END);
         PIXEndEvent(cmdList);
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SHADOW_FRUSTUM_END);
         return;
     }
 
@@ -754,6 +808,7 @@ void Renderer::OcclusionPhase1Pass(ID3D12GraphicsCommandList* cmdList) {
 void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     PIXBeginEvent(cmdList, PIX_COLOR(0, 0, 255), L"Depth Recording Pass");
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_DEPTH_BEGIN);
+
     auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
 
     depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
@@ -884,6 +939,15 @@ void Renderer::OcclusionPhase2Pass(ID3D12GraphicsCommandList* cmdList) {
     PIXEndEvent(cmdList);
 } // OcclusionPhase2Pass
 
+void Renderer::BRDFIntegrationPass(ID3D12GraphicsCommandList* cmdList) {
+    if (m_BRDFIntegrationLUT->IsGenerated()) {
+        return;
+    }
+    PIXBeginEvent(cmdList, PIX_COLOR(100, 100, 255), L"BRDF Integration Pass");
+    m_BRDFIntegrationLUT->Generate(cmdList);
+    PIXEndEvent(cmdList);
+} // BRDFIntegrationPass
+
 void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     using namespace SharedCommons;
     // 스폰자 씬 렌더링
@@ -891,7 +955,6 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_BEGIN);
 
     auto csmTexture = m_RenderTextureManager->GetRenderTexture(KEY_SHADOW_MAP_RENDER_TEXTURE);
-
 
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
@@ -910,6 +973,49 @@ void Renderer::SponzaPass(ID3D12GraphicsCommandList* cmdList) {
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_END);
     PIXEndEvent(cmdList);
 } // SponzaPass
+
+void Renderer::GBufferPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(100, 200, 100), L"G-Buffer Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_GBUFFER_BEGIN);
+
+    auto gbuffer0 = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_GBUFFER0_RENDER_TEXTURE).get();
+    auto gbuffer1 = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE).get();
+    auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
+
+    gbuffer0->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    gbuffer1->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvs[2] = { gbuffer0->GetRTVHandle(), gbuffer1->GetRTVHandle() };
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv = depthTexture->GetDSVHandle();
+
+    const float clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    cmdList->ClearRenderTargetView(rtvs[0], clearColor, 0, nullptr);
+    cmdList->ClearRenderTargetView(rtvs[1], clearColor, 0, nullptr);
+    cmdList->OMSetRenderTargets(2, rtvs, FALSE, &dsv);
+
+    cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
+    cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
+
+    Sponza::SubmitIndirectParams submitParams;
+    submitParams.cmdList = cmdList;
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
+    submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
+    submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
+    submitParams.vaseVisibleCommandsBuffer = m_OcclusionCuller->GetFinalVaseCommandsBuffer();
+    submitParams.vaseCounterBuffer = m_OcclusionCuller->GetFinalVaseCounterBuffer();
+    submitParams.type = Sponza::SubmitIndirectType::GBuffer;
+
+    m_Sponza->SubmitIndirect(submitParams);
+
+    gbuffer0->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    gbuffer1->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    depthTexture->Transition(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_GBUFFER_END);
+    PIXEndEvent(cmdList);
+} // GBufferPass
 
 void Renderer::OnGUI() {
     const FrameParams& currentFrameParams = m_RendererState->GetCurrentFrameParams();
@@ -948,6 +1054,7 @@ void Renderer::OnGUI() {
     const double csmTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_CSM_BEGIN, GPU_QUERY_CSM_END);
     const double occlusionPhase2Time = m_GPUMonitor->GetTimeMs(
         GPU_QUERY_OCCLUSION_PHASE2_BEGIN, GPU_QUERY_OCCLUSION_PHASE2_END);
+    const double gTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_GBUFFER_BEGIN, GPU_QUERY_GBUFFER_END);
     const double sceneTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_SCENE_BEGIN, GPU_QUERY_SCENE_END);
     const double imguiTime = m_GPUMonitor->GetTimeMs(GPU_QUERY_IMGUI_BEGIN, GPU_QUERY_IMGUI_END);
 
@@ -959,6 +1066,7 @@ void Renderer::OnGUI() {
     ImGui::Text("Hi-Z: %.3f ms", hizTime);
     ImGui::Text("CSM: %.3f ms", csmTime);
     ImGui::Text("Occlusion 2: %.3f ms", occlusionPhase2Time);
+    ImGui::Text("G-Buffer: %.3f ms", gTime);
     ImGui::Text("Scene: %.3f ms", sceneTime);
     ImGui::Text("ImGui: %.3f ms", imguiTime);
     ImGui::Separator();

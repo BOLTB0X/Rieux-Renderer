@@ -109,6 +109,14 @@ namespace GPUCommons {
         }
     }; // IndirectCommand
 
+    struct BRDF_LUT_CB
+    {
+        UINT LUTSize;
+
+        BRDF_LUT_CB() : LUTSize(0) {
+        }
+    }; // BRDF_LUT_CB
+
 } // struct
 
 namespace GPUCommons {

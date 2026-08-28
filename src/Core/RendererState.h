@@ -96,6 +96,13 @@ public: // Screen
     static UINT CascadeIndexConstant;
     static UINT CSMShadowMapIndex;
 
+    static UINT BRDFLUTConstantBufferIndex;
+    static UINT BRDFLUTIndex;
+
+    static UINT PrefilterConstantBufferIndex;
+    static UINT SourceCubemapIndex;
+    static UINT OutputMipFaceIndex;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 

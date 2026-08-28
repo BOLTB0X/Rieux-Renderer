@@ -82,6 +82,13 @@ UINT RendererState::ShadowCullingVaseVisibleCommandsCascade3Index = 39;
 UINT RendererState::ShadowCullingMainDrawCountsIndex = 38;
 UINT RendererState::ShadowCullingVaseDrawCountsIndex = 39;
 
+UINT RendererState::BRDFLUTConstantBufferIndex = 38;
+UINT RendererState::BRDFLUTIndex = 39;
+
+UINT RendererState::PrefilterConstantBufferIndex = 38;
+UINT RendererState::SourceCubemapIndex = 39;
+UINT RendererState::OutputMipFaceIndex = 40;
+
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 

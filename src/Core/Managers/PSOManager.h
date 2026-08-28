@@ -45,12 +45,15 @@ private:
     bool BuildFrustumCullingCompute(const std::string&, const std::wstring&);
     bool BuildShadowFrustumCullingCompute(const std::string&, const std::wstring&);
     bool BuildOcclusionCullingCompute(const std::string&, const std::wstring&);
+    bool BuildBRDFIntegrationCompute(const std::string&, const std::wstring&);
+    bool BuildPrefilterEnvironmentCompute(const std::string&, const std::wstring&);
 
     bool BuildDepthRecord(const std::string&);
 	bool BuildShadowRecord(const std::string&);
     bool BuildCascadedShadowRecord(const std::string&);
 	bool BuildHierarchicalZ(const std::string&);
     bool BuildProbeCapture(const std::string&);
+    bool BuildGBuffer(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);

@@ -34,6 +34,8 @@ class RendererDebugger;
 class ShadowFrustumCuller;
 class CascadedShadowMap;
 class EnvironmentProbe;
+class BRDFIntegrationLUT;
+class PrefilterEnvironment;
 
 class Renderer {
 public:
@@ -74,6 +76,8 @@ private:
         GPU_QUERY_CSM_END,
         GPU_QUERY_OCCLUSION_PHASE2_BEGIN,
         GPU_QUERY_OCCLUSION_PHASE2_END,
+        GPU_QUERY_GBUFFER_BEGIN,
+        GPU_QUERY_GBUFFER_END,
         GPU_QUERY_SCENE_BEGIN,
         GPU_QUERY_SCENE_END,
         GPU_QUERY_IMGUI_BEGIN,
@@ -99,6 +103,9 @@ private:
     void OcclusionPhase1Pass(ID3D12GraphicsCommandList*);
     void OcclusionPhase2Pass(ID3D12GraphicsCommandList*);
     void SponzaPass(ID3D12GraphicsCommandList*);
+    void GBufferPass(ID3D12GraphicsCommandList*);
+
+    void BRDFIntegrationPass(ID3D12GraphicsCommandList*);
 
     void OnGUI();
 
@@ -134,6 +141,8 @@ private:
     std::unique_ptr<OcclusionCuller>         m_OcclusionCuller;
     std::unique_ptr<CascadedShadowMap>       m_CascadedShadowMap;
     std::unique_ptr<EnvironmentProbe>        m_EnvironmentProbe;
+    std::unique_ptr<BRDFIntegrationLUT>      m_BRDFIntegrationLUT;
+    std::unique_ptr<PrefilterEnvironment>    m_PrefilterEnvironment;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------

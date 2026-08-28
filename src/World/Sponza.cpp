@@ -34,6 +34,8 @@ Sponza::Sponza() : AssimpModel(), m_enableWireframe(false), m_instanceDataSRV{},
     m_psoCSMAlpha = nullptr;
     m_psoProbeSolid = nullptr;
     m_psoProbeAlpha = nullptr;
+    m_psoGBufferSolid = nullptr;
+    m_psoGBufferAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // Sponza
@@ -51,6 +53,8 @@ Sponza::~Sponza() {
     m_psoCSMAlpha = nullptr;
     m_psoProbeSolid = nullptr;
     m_psoProbeAlpha = nullptr;
+    m_psoGBufferSolid = nullptr;
+    m_psoGBufferAlpha = nullptr;
     m_psoDebug = nullptr;
     m_heapAllocator = nullptr;
 } // ~Sponza
@@ -94,6 +98,8 @@ bool Sponza::Init(const InitParams& params) {
     m_psoCSMAlpha = params.psoCSMAlpha;
     m_psoProbeSolid = params.psoProbeSolid;
     m_psoProbeAlpha = params.psoProbeAlpha;
+    m_psoGBufferSolid = params.psoGBufferSolid;
+    m_psoGBufferAlpha = params.psoGBufferAlpha;
     m_psoDebug = params.psoDebug;
     return true;
 } // Init
@@ -142,6 +148,10 @@ void Sponza::SubmitIndirect(const SubmitIndirectParams& params) {
     else if (params.type == SubmitIndirectType::ProbeCapture) {
         mainPSO = m_psoProbeSolid;
         sidePSO = m_psoProbeAlpha;
+    }
+    else if (params.type == SubmitIndirectType::GBuffer) {
+        mainPSO = m_psoGBufferSolid;
+        sidePSO = m_psoGBufferAlpha;
     }
     else {
         mainPSO = m_psoDepthSolid;

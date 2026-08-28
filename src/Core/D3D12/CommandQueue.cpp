@@ -75,9 +75,24 @@ void CommandQueue::Shutdown() {
     }
 } // Shutdown
 
-void CommandQueue::Reset() {
-    m_commandAllocator->Reset();
-    m_commandList->Reset(m_commandAllocator.Get(), nullptr);
+bool CommandQueue::Reset() {
+    if (!m_commandAllocator || !m_commandList) {
+        return false;
+    }
+
+    HRESULT hr = m_commandAllocator->Reset();
+    if (FAILED(hr)) {
+        DebugHelper::DebugPrint("Command allocator Reset 실패");
+        return false;
+    }
+
+    hr = m_commandList->Reset(m_commandAllocator.Get(), nullptr);
+    if (FAILED(hr)) {
+        DebugHelper::DebugPrint("Command list Reset 실패");
+        return false;
+    }
+
+    return true;
 } // Reset
 
 void CommandQueue::Execute() {

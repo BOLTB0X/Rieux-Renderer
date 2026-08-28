@@ -13,7 +13,7 @@ public:
 
     bool Init(ID3D12Device*);
     void Shutdown();
-    void Reset();
+    bool Reset();
 
     void Execute();
     void WaitForPreviousFrame();
