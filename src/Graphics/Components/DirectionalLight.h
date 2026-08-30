@@ -33,4 +33,5 @@ private:
     DirectX::XMFLOAT3 m_lookAt;
     DirectX::XMMATRIX m_viewMatrix;
     DirectX::XMMATRIX m_projectionMatrix;
+    float             m_intensity;
 }; // DirectionalLight

@@ -50,7 +50,6 @@ float4 main(PS_IN input) : SV_TARGET
     if (inst.roughnessIndex != 0xFFFFFFFF)
         roughness = saturate(g_Textures[NonUniformResourceIndex(inst.roughnessIndex)].Sample(Sampler, input.texcoord).r * inst.roughnessFactor);
 
-    // 그림자 없이 1.0f 고정 - 재귀 방지
     float3 directTerm = Evaluate_Direct_PBR(albedoColor.rgb, metallic, roughness, normalWS, V, L, LIGHT_DIFFUSE.rgb, 1.0f);
     float3 ambientTerm = LIGHT_AMBIENT.rgb * albedoColor.rgb * (1.0f - metallic);
 

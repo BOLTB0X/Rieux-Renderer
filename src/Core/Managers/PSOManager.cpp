@@ -64,7 +64,7 @@ bool PSOManager::Init(const InitParams& params) {
         return false;
     }
 
-    if (!BuildProbeCapture(SharedCommons::KEY_GPU_SPONZA_SIG)) { // 추가
+    if (!BuildProbeCapture(SharedCommons::KEY_GPU_SPONZA_SIG)) {
         DebugHelper::DebugPrint("Probe Capture PSO 빌드 실패");
         return false;
     }
@@ -101,6 +101,21 @@ bool PSOManager::Init(const InitParams& params) {
 
     if (!BuildPrefilterEnvironmentCompute(SharedCommons::KEY_PREFILTER_ENVIRONMENT_SIG,SharedCommons::PREFILTER_ENVIRONMENT_CS)) {
         DebugHelper::DebugPrint("Prefilter Environment PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildIrradianceConvolutionCompute(SharedCommons::KEY_IRRADIANCE_SIG,SharedCommons::IRRADIANCE_CS)) {
+        DebugHelper::DebugPrint("Irradiance PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildDeferredLighting(SharedCommons::KEY_DEFERRED_LIGHTING_SIG)) {
+        DebugHelper::DebugPrint("Deferred Lighting PSO 빌드 실패");
+        return false;
+    }
+
+    if (!BuildToneMapping(SharedCommons::KEY_TONEMAPPING_SIG)) {
+        DebugHelper::DebugPrint("Tone Mapping PSO 빌드 실패");
         return false;
     }
 
@@ -542,7 +557,7 @@ bool PSOManager::BuildBRDFIntegrationCompute(const std::string& signatureKey, co
 
 bool PSOManager::BuildPrefilterEnvironmentCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
     if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
-        b.AddConstants("PrefilterCB", /*레지스터*/ 0, /*32bit 값 개수*/ 4, D3D12_SHADER_VISIBILITY_ALL)
+        b.AddConstants("PrefilterCB", 0,  4, D3D12_SHADER_VISIBILITY_ALL)
             .AddSRVTable("SourceCubemap", 0, D3D12_SHADER_VISIBILITY_ALL) // t0
             .AddUAVTable("OutputMipFace", 0, D3D12_SHADER_VISIBILITY_ALL) // u0
             .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -559,10 +574,7 @@ bool PSOManager::BuildPrefilterEnvironmentCompute(const std::string& signatureKe
     ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
 
     if (!rootSignature) {
-        DebugHelper::DebugPrint(
-            "루트 시그니처 조회 실패 (Prefilter Environment): " +
-            signatureKey);
-
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (Prefilter Environment): " + signatureKey);
         return false;
     }
 
@@ -592,11 +604,52 @@ bool PSOManager::BuildPrefilterEnvironmentCompute(const std::string& signatureKe
         return false;
     }
 
-    m_psoMap[SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO] =
-        std::move(pso);
+    m_psoMap[SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO] = std::move(pso);
 
     return true;
 } // BuildPrefilterEnvironmentCompute
+
+bool PSOManager::BuildIrradianceConvolutionCompute(const std::string& signatureKey, const std::wstring& shaderPath) {
+    if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
+        b.AddConstants("IrradianceCB", 0, 3, D3D12_SHADER_VISIBILITY_ALL)
+            .AddSRVTable("SourceCubemap", 0, D3D12_SHADER_VISIBILITY_ALL) // t0
+            .AddUAVTable("OutputMipFace", 0, D3D12_SHADER_VISIBILITY_ALL) // u0
+            .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                D3D12_SHADER_VISIBILITY_ALL);
+        })) {
+        return false;
+    }
+
+    RendererState::IrradianceConstantIndex = GetRootParamIndex(signatureKey, "IrradianceCB");
+    RendererState::IrradianceSourceCubemapIndex = GetRootParamIndex(signatureKey, "SourceCubemap");
+    RendererState::IrradianceOutputIndex = GetRootParamIndex(signatureKey, "OutputMipFace");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (Prefilter Environment): " + signatureKey);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> csBlob;
+    if (!ShaderHelper::InitComputeShader(shaderPath, csBlob.GetAddressOf())) {
+        return false;
+    }
+    m_shaderBlobs[SharedCommons::IRRADIANCE_CS_STR] = csBlob;
+
+    D3D12PipelineState::ComputeInitParams computeParams;
+    computeParams.device = m_device;
+    computeParams.rootSignature = rootSignature;
+    computeParams.computeShader = CD3DX12_SHADER_BYTECODE(csBlob->GetBufferPointer(), csBlob->GetBufferSize());
+
+    auto pso = std::make_unique<D3D12PipelineState>();
+    if (!pso->InitCompute(computeParams)) {
+        return false;
+    }
+
+    m_psoMap[SharedCommons::KEY_IRRADIANCE_PSO] = std::move(pso);
+    return true;
+} // BuildIrradianceConvolutionCompute
 
 bool PSOManager::BuildDepthRecord(const std::string& signatureKey) {
     ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
@@ -617,7 +670,6 @@ bool PSOManager::BuildDepthRecord(const std::string& signatureKey) {
     m_shaderBlobs[SharedCommons::DEPTH_VS_STR] = vsBlob;
     m_shaderBlobs[SharedCommons::DEPTH_PS_STR] = psBlob;
 
-    // Base PSO 파라미터
     D3D12PipelineState::DefaultInitParams baseParams;
     baseParams.device = m_device;
     baseParams.rootSignature = rootSignature;
@@ -854,6 +906,107 @@ bool PSOManager::BuildGBuffer(const std::string& signatureKey) {
     result &= BuildSolidCullNone(SharedCommons::KEY_GBUFFER_ALPHA_NO_CULL, baseParams);
     return result;
 } // BuildGBuffer
+
+bool PSOManager::BuildDeferredLighting(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
+        b.AddCBV("FrameCB", 0, D3D12_SHADER_VISIBILITY_ALL)
+            .AddCBV("LightCB", 1, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddSRVTable("GBuffer0", 0, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("GBuffer1", 1, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("Depth", 4, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("CSMShadowMap", 3, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("IrradianceMap", 5, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("PrefilteredMap", 6, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddSRVTable("BRDFLUT", 7, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0)
+            .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL)
+            .AddStaticSampler(1, D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_SHADER_VISIBILITY_PIXEL);
+        })) {
+        return false;
+    }
+
+    RendererState::DeferredFrameCBIndex = GetRootParamIndex(signatureKey, "FrameCB");
+    RendererState::DeferredLightCBIndex = GetRootParamIndex(signatureKey, "LightCB");
+    RendererState::DeferredGBuffer0Index = GetRootParamIndex(signatureKey, "GBuffer0");
+    RendererState::DeferredGBuffer1Index = GetRootParamIndex(signatureKey, "GBuffer1");
+    RendererState::DeferredDepthIndex = GetRootParamIndex(signatureKey, "Depth");
+    RendererState::DeferredCSMIndex = GetRootParamIndex(signatureKey, "CSMShadowMap");
+    RendererState::DeferredIrradianceIndex = GetRootParamIndex(signatureKey, "IrradianceMap");
+    RendererState::DeferredPrefilterIndex = GetRootParamIndex(signatureKey, "PrefilteredMap");
+    RendererState::DeferredBRDFLUTIndex = GetRootParamIndex(signatureKey, "BRDFLUT");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    ComPtr<IDxcBlob> vsBlob, psBlob;
+    if (!ShaderHelper::InitVertexShader(SharedCommons::FULLSCREEN_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::DEFERRED_LIGHTING_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+    baseParams.inputLayout = { nullptr, 0 };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = m_rtvFormat;
+    baseParams.dsvFormat = DXGI_FORMAT_UNKNOWN;
+    baseParams.depthStencilState.DepthEnable = FALSE;
+
+    return BuildSolidCullNone(SharedCommons::KEY_DEFERRED_LIGHTING_PSO, baseParams);
+} // BuildDeferredLighting
+
+bool PSOManager::BuildToneMapping(const std::string& signatureKey) {
+    if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {
+        b.AddSRVTable("HDRTexture", 0, D3D12_SHADER_VISIBILITY_PIXEL, 1, 0) // t0, space0
+            .AddStaticSampler(0, D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+                D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                D3D12_SHADER_VISIBILITY_PIXEL);                             // s0
+        })) {
+        return false;
+    }
+
+    RendererState::ToneMappingHDRTexIndex = GetRootParamIndex(signatureKey, "HDRTexture");
+
+    ID3D12RootSignature* rootSignature = GetID3D12RootSignature(signatureKey);
+    if (!rootSignature) {
+        DebugHelper::DebugPrint("루트 시그니처 조회 실패 (Tone Mapping): " + signatureKey);
+        return false;
+    }
+
+    ComPtr<IDxcBlob> vsBlob;
+    ComPtr<IDxcBlob> psBlob;
+
+    if (!ShaderHelper::InitVertexShader(SharedCommons::FULLSCREEN_VS, vsBlob.GetAddressOf()) ||
+        !ShaderHelper::InitPixelShader(SharedCommons::ACES_FILM_PS, psBlob.GetAddressOf())) {
+        return false;
+    }
+
+    m_shaderBlobs[SharedCommons::FULLSCREEN_VS_STR] = vsBlob;
+    m_shaderBlobs[SharedCommons::ACES_FILM_PS_STR] = psBlob;
+
+    D3D12PipelineState::DefaultInitParams baseParams;
+    baseParams.device = m_device;
+    baseParams.rootSignature = rootSignature;
+    baseParams.vertexShader = CD3DX12_SHADER_BYTECODE(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize());
+    baseParams.pixelShader = CD3DX12_SHADER_BYTECODE(psBlob->GetBufferPointer(), psBlob->GetBufferSize());
+
+    baseParams.inputLayout = { nullptr, 0 };
+    baseParams.numRenderTargets = 1;
+    baseParams.rtvFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    baseParams.dsvFormat = DXGI_FORMAT_UNKNOWN;
+    baseParams.topologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    baseParams.depthStencilState.DepthEnable = FALSE;
+
+    bool result = BuildSolidCullNone(SharedCommons::KEY_TONEMAPPING_PSO, baseParams);
+
+    if (!result) {
+        DebugHelper::DebugPrint("ToneMapping PSO 초기화 실패");
+    }
+
+    return result;
+} // BuildToneMapping
 
 bool PSOManager::BuildDebugTransReverseZ(const std::string& signatureKey) {
     if (!CreateRootSignature(signatureKey, [](RootSignatureBuilder& b) {

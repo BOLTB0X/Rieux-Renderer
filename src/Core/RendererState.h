@@ -103,6 +103,22 @@ public: // Screen
     static UINT SourceCubemapIndex;
     static UINT OutputMipFaceIndex;
 
+    static UINT IrradianceConstantIndex;
+    static UINT IrradianceSourceCubemapIndex;
+    static UINT IrradianceOutputIndex;
+
+    static UINT DeferredFrameCBIndex;
+    static UINT DeferredLightCBIndex;
+    static UINT DeferredGBuffer0Index;
+    static UINT DeferredGBuffer1Index;
+    static UINT DeferredDepthIndex;
+    static UINT DeferredCSMIndex;
+    static UINT DeferredIrradianceIndex;
+    static UINT DeferredPrefilterIndex;
+    static UINT DeferredBRDFLUTIndex;
+
+    static UINT ToneMappingHDRTexIndex;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 
@@ -116,6 +132,7 @@ public: // Screen
     static UINT DSVCapacity;
 
     static DXGI_FORMAT RTVFormat;
+    static DXGI_FORMAT ImGUIRTVFormat;
 
  // Global CBs
 public:

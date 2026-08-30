@@ -20,6 +20,7 @@
 #include "CascadedShadowMap.h"
 #include "BRDFIntegrationLUT.h"
 #include "PrefilterEnvironment.h"
+#include "IrradianceConvolution.h"
 // Components
 #include "RenderQueue.h"
 #include "Camera.h"
@@ -64,6 +65,7 @@ Renderer::Renderer() {
     m_EnvironmentProbe = std::make_unique<EnvironmentProbe>();
     m_BRDFIntegrationLUT = std::make_unique<BRDFIntegrationLUT>();
     m_PrefilterEnvironment = std::make_unique<PrefilterEnvironment>();
+    m_IrradianceConvolution = std::make_unique<IrradianceConvolution>();
     m_DirectionalLight = std::make_unique<DirectionalLight>();
     m_GPUMonitor = std::make_unique<GPUMonitor>();
     m_TextureManager = std::make_shared<TextureManager>();
@@ -223,6 +225,8 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     RendererState::FrameParams stateParams;
     stateParams.view = renderCamera->GetViewMatrix();
     stateParams.projection = renderCamera->GetReverseZProjectionMatrix();
+    stateParams.viewInv = DirectX::XMMatrixInverse(nullptr, stateParams.view);
+    stateParams.projInv = DirectX::XMMatrixInverse(nullptr, stateParams.projection);
     stateParams.cameraPosition = renderCamera->GetPosition();
     stateParams.cameraFov = renderCamera->GetFov();
     stateParams.direction = m_DirectionalLight->GetDirection();
@@ -246,6 +250,8 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     RendererState::FrameParams sceneFrameParams = stateParams;
     sceneFrameParams.view = m_SceneCamera->GetViewMatrix();
     sceneFrameParams.projection = m_SceneCamera->GetReverseZProjectionMatrix();
+    sceneFrameParams.viewInv = XMMatrixInverse(nullptr, sceneFrameParams.view);
+    sceneFrameParams.projInv = XMMatrixInverse(nullptr, sceneFrameParams.projection);
     sceneFrameParams.cameraPosition = m_SceneCamera->GetPosition();
     sceneFrameParams.cameraFov = m_SceneCamera->GetFov();
     m_RendererState->FrameScene(sceneFrameParams);
@@ -254,9 +260,6 @@ bool Renderer::Frame(const FrameParams& frameParams) {
     envFrameParams.cameraPos = m_SceneCamera->GetPosition();
     envFrameParams.cameraDir = m_SceneCamera->GetRotation();
     m_EnvironmentProbe->Frame(envFrameParams);
-    if (m_PrefilterEnvironment && !m_PrefilterEnvironment->IsGenerated()) {
-        m_EnvironmentProbe->MarkDirty();
-    }
 
     return Render();
 } // Frame
@@ -516,10 +519,8 @@ bool Renderer::LoadAssets(HWND hwnd) {
 
     PrefilterEnvironment::InitParams prefilterInit;
     prefilterInit.device = device;
-    prefilterInit.rootSignature = m_PSOManager->GetID3D12RootSignature(
-        SharedCommons::KEY_PREFILTER_ENVIRONMENT_SIG);
-    prefilterInit.computePSO = m_PSOManager->GetPSO(
-        SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO)->GetPSO();
+    prefilterInit.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_PREFILTER_ENVIRONMENT_SIG);
+    prefilterInit.computePSO = m_PSOManager->GetPSO(SharedCommons::KEY_PREFILTER_ENVIRONMENT_PSO)->GetPSO();
     prefilterInit.renderTextureManager = m_RenderTextureManager.get();
     prefilterInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
     prefilterInit.sourceCubemap = m_EnvironmentProbe->GetCubemapTexture();
@@ -527,8 +528,21 @@ bool Renderer::LoadAssets(HWND hwnd) {
     prefilterInit.mipLevels = 5;
     prefilterInit.sampleCount = 1024;
     prefilterInit.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
     if (!m_PrefilterEnvironment->Init(prefilterInit)) {
+        DebugHelper::DebugPrint("Prefilter Environment 초기화 실패");
+        return false;
+    }
+
+    IrradianceConvolution::InitParams irrInit;
+    irrInit.device = device;
+    irrInit.rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_IRRADIANCE_SIG);
+    irrInit.computePSO = m_PSOManager->GetPSO(SharedCommons::KEY_IRRADIANCE_PSO)->GetPSO();
+    irrInit.renderTextureManager = m_RenderTextureManager.get();
+    irrInit.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
+    irrInit.sourceCubemap = m_EnvironmentProbe->GetCubemapTexture();
+    irrInit.outputSize = 32;
+    irrInit.sampleDelta = 0.025f;
+    if (!m_IrradianceConvolution->Init(irrInit)) {
         DebugHelper::DebugPrint("Prefilter Environment 초기화 실패");
         return false;
     }
@@ -544,6 +558,7 @@ bool Renderer::LoadAssets(HWND hwnd) {
         DebugHelper::DebugPrint("BRDF Integration LUT 초기화 실패");
         return false;
     }
+
     return true;
 } // LoadAssets
 
@@ -553,7 +568,7 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     guiParams.hwnd = hwnd;
     guiParams.device = m_D3D12Device->GetDevice();
     guiParams.numFramesInFlight = RendererState::FrameCount;
-    guiParams.rtvFormat = RendererState::RTVFormat;
+    guiParams.rtvFormat = RendererState::ImGUIRTVFormat;
 	guiParams.heapAllocator = m_sharedDescriptorAllocator.get();
     if (!m_ImGuiManager->Init(guiParams)) {
         return false;
@@ -577,6 +592,11 @@ bool Renderer::LoadGUIs(HWND hwnd, std::shared_ptr<ImGuiManager> imGuiManager) {
     m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
         "Master Camera GUI",
         [this]() { m_MasterCamera->OnGUI(); }
+    ));
+
+    m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
+        "Environment Probe GUI",
+        [this]() { m_EnvironmentProbe->OnGUI(); }
     ));
 
  /*   m_ImGuiManager->AddWidget(std::make_unique<FunctionWidget>(
@@ -617,60 +637,48 @@ void Renderer::PopulateCommandList() {
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
 
     BRDFIntegrationPass(cmdList);
-    ProbeCapturePass(cmdList);
-
     FrustumPass(cmdList);
     ShadowFrustumPass(cmdList);
- 
     OcclusionPhase1Pass(cmdList);
     DepthPass(cmdList);
     ShadowPass(cmdList);
+    ProbeCapturePass(cmdList);
     OcclusionPhase2Pass(cmdList);
+    GBufferPass(cmdList);
 
     const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 
-    // 오프스크린 타겟(씬 렌더 타겟) 세팅
+    // 오프스크린 타겟 세팅
     m_SceneRenderTarget->BeginRender(cmdList, clearColor);
 
     cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
-    SponzaPass(cmdList);
-    GBufferPass(cmdList);
+    DeferredLightingPass(cmdList);
 
+    // 오프스크린 타겟 렌더 종료
     m_SceneRenderTarget->EndRender(cmdList);
 
-    D3D12_RESOURCE_BARRIER preCopyBarriers[2] = {
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SceneRenderTarget->GetColorResource(),
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SwapChain->GetCurrentBackBuffer(),
-            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST)
-    };
-    cmdList->ResourceBarrier(2, preCopyBarriers);
-
-    cmdList->CopyResource(m_SwapChain->GetCurrentBackBuffer(), m_SceneRenderTarget->GetColorResource());
-
-    D3D12_RESOURCE_BARRIER postCopyBarriers[2] = {
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SwapChain->GetCurrentBackBuffer(),
-            D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_RENDER_TARGET),
-        CD3DX12_RESOURCE_BARRIER::Transition(
-            m_SceneRenderTarget->GetColorResource(),
-            D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
-    };
-    cmdList->ResourceBarrier(2, postCopyBarriers);
+    // 백버퍼 렌더 타겟 준비 (PRESENT -> RENDER_TARGET)
+    CD3DX12_RESOURCE_BARRIER toRTVBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
+        m_SwapChain->GetCurrentBackBuffer(),
+        D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    cmdList->ResourceBarrier(1, &toRTVBarrier);
 
     D3D12_CPU_DESCRIPTOR_HANDLE swapChainRTV = m_SwapChain->GetCurrentRTVHandle();
     cmdList->OMSetRenderTargets(1, &swapChainRTV, FALSE, nullptr);
     cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
     cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
 
+    // 톤매핑 패스 실행
+    ToneMappingPass(cmdList);
+
+    // ImGui 렌더링
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_IMGUI_BEGIN);
     m_ImGuiManager->RenderDrawData(cmdList);
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_IMGUI_END);
 
+    // 백버퍼 출력 준비 (RENDER_TARGET -> PRESENT)
     CD3DX12_RESOURCE_BARRIER toPresentBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_SwapChain->GetCurrentBackBuffer(),
         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
@@ -738,6 +746,11 @@ void Renderer::ProbeCapturePass(ID3D12GraphicsCommandList* cmdList) {
     if (m_PrefilterEnvironment) {
         m_PrefilterEnvironment->Invalidate();
         m_PrefilterEnvironment->Generate(cmdList);
+    }
+
+    if (m_IrradianceConvolution) {
+        m_IrradianceConvolution->Invalidate();
+        m_IrradianceConvolution->Generate(cmdList);
     }
 
     m_EnvironmentProbe->ClearDirty();
@@ -1016,6 +1029,75 @@ void Renderer::GBufferPass(ID3D12GraphicsCommandList* cmdList) {
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_GBUFFER_END);
     PIXEndEvent(cmdList);
 } // GBufferPass
+
+void Renderer::DeferredLightingPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(255, 0, 0), L"Deferred Lighting Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_BEGIN);
+
+    if (!cmdList || !m_PSOManager || !m_RenderTextureManager ||
+        !m_sharedDescriptorAllocator || !m_RendererState ||
+        !m_IrradianceConvolution || !m_PrefilterEnvironment ||
+        !m_BRDFIntegrationLUT) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    auto gbuffer0 = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_GBUFFER0_RENDER_TEXTURE).get();
+    auto gbuffer1 = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE).get();
+    auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
+    auto csmTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_SHADOW_MAP_RENDER_TEXTURE).get();
+    auto rootSignature = m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_DEFERRED_LIGHTING_SIG);
+    auto pipelineState = m_PSOManager->GetPSO(SharedCommons::KEY_DEFERRED_LIGHTING_PSO);
+
+    if (!gbuffer0 || !gbuffer1 || !depthTexture || !csmTexture ||
+        !rootSignature || !pipelineState) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_END);
+        PIXEndEvent(cmdList);
+        return;
+    }
+
+    cmdList->SetGraphicsRootSignature(rootSignature);
+    cmdList->SetPipelineState(pipelineState->GetPSO());
+
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::DeferredFrameCBIndex, m_RendererState->GetFrameCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::DeferredLightCBIndex, m_RendererState->GetLightCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredGBuffer0Index, m_sharedDescriptorAllocator->GetGPUHandle(gbuffer0->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredGBuffer1Index, m_sharedDescriptorAllocator->GetGPUHandle(gbuffer1->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredDepthIndex, m_sharedDescriptorAllocator->GetGPUHandle(depthTexture->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredCSMIndex, m_sharedDescriptorAllocator->GetGPUHandle(csmTexture->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredIrradianceIndex, m_sharedDescriptorAllocator->GetGPUHandle(m_IrradianceConvolution->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredPrefilterIndex, m_sharedDescriptorAllocator->GetGPUHandle(m_PrefilterEnvironment->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredBRDFLUTIndex, m_sharedDescriptorAllocator->GetGPUHandle(m_BRDFIntegrationLUT->GetSRVIndex()));
+
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->DrawInstanced(3, 1, 0, 0);
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SCENE_END);
+    PIXEndEvent(cmdList);
+} // DeferredLightingPass
+
+void Renderer::ToneMappingPass(ID3D12GraphicsCommandList* cmdList) {
+    //auto hdrTexture = m_SceneRenderTarget->GetColorResource();
+
+    cmdList->SetGraphicsRootSignature(
+        m_PSOManager->GetID3D12RootSignature(
+            SharedCommons::KEY_TONEMAPPING_SIG));
+
+    cmdList->SetPipelineState(
+        m_PSOManager->GetPSO(
+            SharedCommons::KEY_TONEMAPPING_PSO)->GetPSO());
+
+    cmdList->SetGraphicsRootDescriptorTable(
+        RendererState::ToneMappingHDRTexIndex,
+        m_sharedDescriptorAllocator->GetGPUHandle(
+            m_SceneRenderTarget->GetColorSRVIndex()));
+
+    cmdList->IASetPrimitiveTopology(
+        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    cmdList->DrawInstanced(3, 1, 0, 0);
+} // ToneMappingPass
 
 void Renderer::OnGUI() {
     const FrameParams& currentFrameParams = m_RendererState->GetCurrentFrameParams();

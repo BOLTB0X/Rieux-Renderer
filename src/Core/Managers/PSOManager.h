@@ -47,6 +47,7 @@ private:
     bool BuildOcclusionCullingCompute(const std::string&, const std::wstring&);
     bool BuildBRDFIntegrationCompute(const std::string&, const std::wstring&);
     bool BuildPrefilterEnvironmentCompute(const std::string&, const std::wstring&);
+    bool BuildIrradianceConvolutionCompute(const std::string&, const std::wstring&);
 
     bool BuildDepthRecord(const std::string&);
 	bool BuildShadowRecord(const std::string&);
@@ -54,6 +55,8 @@ private:
 	bool BuildHierarchicalZ(const std::string&);
     bool BuildProbeCapture(const std::string&);
     bool BuildGBuffer(const std::string&);
+    bool BuildDeferredLighting(const std::string&);
+    bool BuildToneMapping(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);

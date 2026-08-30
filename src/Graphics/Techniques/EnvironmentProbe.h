@@ -8,6 +8,7 @@
 class RenderTexture;
 class RenderTextureManager;
 class DescriptorHeapAllocator;
+class Transform;
 
 class EnvironmentProbe {
 public:
@@ -45,6 +46,7 @@ public:
     void MarkDirty();
     bool IsDirty() const;
     void ClearDirty();
+    void OnGUI();
 
 public:
     RenderTexture*            GetCubemapTexture() const;
@@ -57,17 +59,17 @@ private:
     void UpdateFaceMatrices();
 
 private:
-    RenderTexture* m_cubemapTexture;
-    RenderTexture* m_depthTexture;
+    RenderTexture*                                                 m_cubemapTexture;
+    RenderTexture*                                                 m_depthTexture;
     std::array<DirectX::XMMATRIX, FACE_COUNT>                      m_faceViewMatrices;
     DirectX::XMMATRIX                                              m_faceProjMatrix;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, FACE_COUNT> m_faceFrameCB;
     std::array<UINT8*, FACE_COUNT>                                 m_mappedFaceFrameCB;
 
     DirectX::XMFLOAT3                                              m_position;
-    DirectX::XMFLOAT3                                              m_prevCameraPos;
-    DirectX::XMFLOAT3                                              m_prevCameraDir;
+    std::unique_ptr<Transform>                                     m_transform;
 
     UINT                                                           m_faceSize;
     bool                                                           m_isDirty;
+    bool                                                           m_isInitialized;
 }; // EnvironmentProbe

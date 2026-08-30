@@ -277,7 +277,7 @@ bool RenderTexture::CreateShaderResourceViews(const InitParams& params) {
 
 bool RenderTexture::CreateUnorderedAccessViews(const InitParams& params) {
     if (m_arraySize > 1) {
-        if (m_isCubeMap && m_mipLevels > 1) {
+        if (m_isCubeMap) {
             m_mipFaceUavIndices.resize(m_mipLevels * m_arraySize);
             m_mipFaceSrvIndices.resize(m_mipLevels * m_arraySize);
 

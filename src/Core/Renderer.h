@@ -36,6 +36,7 @@ class CascadedShadowMap;
 class EnvironmentProbe;
 class BRDFIntegrationLUT;
 class PrefilterEnvironment;
+class IrradianceConvolution;
 
 class Renderer {
 public:
@@ -104,8 +105,9 @@ private:
     void OcclusionPhase2Pass(ID3D12GraphicsCommandList*);
     void SponzaPass(ID3D12GraphicsCommandList*);
     void GBufferPass(ID3D12GraphicsCommandList*);
-
     void BRDFIntegrationPass(ID3D12GraphicsCommandList*);
+    void DeferredLightingPass(ID3D12GraphicsCommandList*);
+    void ToneMappingPass(ID3D12GraphicsCommandList*);
 
     void OnGUI();
 
@@ -143,6 +145,7 @@ private:
     std::unique_ptr<EnvironmentProbe>        m_EnvironmentProbe;
     std::unique_ptr<BRDFIntegrationLUT>      m_BRDFIntegrationLUT;
     std::unique_ptr<PrefilterEnvironment>    m_PrefilterEnvironment;
+    std::unique_ptr<IrradianceConvolution>   m_IrradianceConvolution;
     // --------------------------------------------------
     // World 데이터
     // --------------------------------------------------
