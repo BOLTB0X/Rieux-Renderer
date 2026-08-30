@@ -34,7 +34,6 @@ bool RenderTexture::Init(const InitParams& params) {
     m_mipLevels = params.mipLevels > 0 ? params.mipLevels : 1;
     m_isCubeMap = params.isCubeMap;
 
-    // 2. 실제 D3D12 리소스 생성
     if (!CreateTextureResource(params)) {
         return false;
     }
@@ -127,6 +126,11 @@ UINT RenderTexture::GetMipFaceUAVIndex(UINT mip, UINT face) const {
     UINT idx = mip * m_arraySize + face;
     return idx < m_mipFaceUavIndices.size() ? m_mipFaceUavIndices[idx] : UINT_MAX;
 } // GetMipFaceUAVIndex
+
+UINT RenderTexture::GetMipFaceSRVIndex(UINT mip, UINT face) const {
+    UINT idx = mip * m_arraySize + face;
+    return idx < m_mipFaceSrvIndices.size() ? m_mipFaceSrvIndices[idx] : UINT_MAX;
+}
 
 bool RenderTexture::CreateTextureResource(const InitParams& params) {
     CD3DX12_HEAP_PROPERTIES defaultHeapProps(D3D12_HEAP_TYPE_DEFAULT);
@@ -273,8 +277,10 @@ bool RenderTexture::CreateShaderResourceViews(const InitParams& params) {
 
 bool RenderTexture::CreateUnorderedAccessViews(const InitParams& params) {
     if (m_arraySize > 1) {
-        if (m_isCubeMap && m_mipLevels > 1) {
+        if (m_isCubeMap) {
             m_mipFaceUavIndices.resize(m_mipLevels * m_arraySize);
+            m_mipFaceSrvIndices.resize(m_mipLevels * m_arraySize);
+
             for (UINT mip = 0; mip < m_mipLevels; ++mip) {
                 for (UINT face = 0; face < m_arraySize; ++face) {
                     D3D12_UNORDERED_ACCESS_VIEW_DESC mipFaceUav = {};
@@ -288,9 +294,24 @@ bool RenderTexture::CreateUnorderedAccessViews(const InitParams& params) {
                     params.device->CreateUnorderedAccessView(m_resource.Get(), nullptr, &mipFaceUav,
                         params.sharedDescriptorAllocator->GetCPUHandle(idx));
                     m_mipFaceUavIndices[mip * m_arraySize + face] = idx;
-                }
-            }
-        }
+
+                    // 디버깅용
+                    D3D12_SHADER_RESOURCE_VIEW_DESC mipFaceSrv = {};
+                    mipFaceSrv.Format = params.format;
+                    mipFaceSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    mipFaceSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                    mipFaceSrv.Texture2DArray.MostDetailedMip = mip;
+                    mipFaceSrv.Texture2DArray.MipLevels = 1;
+                    mipFaceSrv.Texture2DArray.FirstArraySlice = face;
+                    mipFaceSrv.Texture2DArray.ArraySize = 1;
+
+                    UINT srvIdx = params.sharedDescriptorAllocator->Allocate();
+                    params.device->CreateShaderResourceView(m_resource.Get(), &mipFaceSrv,
+                        params.sharedDescriptorAllocator->GetCPUHandle(srvIdx));
+                    m_mipFaceSrvIndices[mip * m_arraySize + face] = srvIdx;
+                } // for (UINT face = 0; face < m_arraySize; ++face)
+            } // for (UINT mip = 0; mip < m_mipLevels; ++mip)
+        } // if (m_isCubeMap && m_mipLevels > 1)
     }
     else {
         if (m_mipLevels <= 1) {

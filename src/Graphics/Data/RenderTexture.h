@@ -62,6 +62,7 @@ public:
     D3D12_GPU_DESCRIPTOR_HANDLE GetMipUAVGPUHandle(UINT) const;
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVHandle(UINT) const;
     UINT                        GetMipFaceUAVIndex(UINT, UINT) const;
+    UINT                        GetMipFaceSRVIndex(UINT, UINT) const;
     UINT                        GetArraySize() const;
 
     bool                        IsCubeMap() const;
@@ -94,4 +95,5 @@ private:
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_dsvSliceHandles;
     std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> m_rtvSliceHandles;
     std::vector<UINT>                        m_mipFaceUavIndices;
+    std::vector<UINT>                        m_mipFaceSrvIndices;
 }; // RenderTexture

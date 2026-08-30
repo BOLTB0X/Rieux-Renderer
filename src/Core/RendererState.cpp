@@ -82,6 +82,29 @@ UINT RendererState::ShadowCullingVaseVisibleCommandsCascade3Index = 39;
 UINT RendererState::ShadowCullingMainDrawCountsIndex = 38;
 UINT RendererState::ShadowCullingVaseDrawCountsIndex = 39;
 
+UINT RendererState::BRDFLUTConstantBufferIndex = 38;
+UINT RendererState::BRDFLUTIndex = 39;
+
+UINT RendererState::PrefilterConstantBufferIndex = 38;
+UINT RendererState::SourceCubemapIndex = 39;
+UINT RendererState::OutputMipFaceIndex = 40;
+
+UINT RendererState::IrradianceOutputIndex = 38;
+UINT RendererState::IrradianceSourceCubemapIndex = 39;
+UINT RendererState::IrradianceConstantIndex = 40;
+
+UINT RendererState::DeferredFrameCBIndex = 41;
+UINT RendererState::DeferredLightCBIndex = 42;
+UINT RendererState::DeferredGBuffer0Index = 43;
+UINT RendererState::DeferredGBuffer1Index = 44;
+UINT RendererState::DeferredDepthIndex = 45;
+UINT RendererState::DeferredCSMIndex = 46;
+UINT RendererState::DeferredIrradianceIndex = 47;
+UINT RendererState::DeferredPrefilterIndex = 48;
+UINT RendererState::DeferredBRDFLUTIndex = 49;
+
+UINT RendererState::ToneMappingHDRTexIndex = 50;
+
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 
@@ -96,7 +119,8 @@ UINT  RendererState::DSVCapacity = 16;
 
 UINT  RendererState::StaticSamplerIndex = 0;
 
-DXGI_FORMAT RendererState::RTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+DXGI_FORMAT RendererState::RTVFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+DXGI_FORMAT RendererState::ImGUIRTVFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 RendererState::RendererState()
     : m_mappedFrameCB(nullptr), m_mappedSceneFrameCB(nullptr), m_mappedLightCB(nullptr),
@@ -165,6 +189,8 @@ void RendererState::Frame(const FrameParams& frameParams) {
     frameData.projection = XMMatrixTranspose(frameParams.projection);
     frameData.cameraPosition = frameParams.cameraPosition;
     frameData.cameraFov = frameParams.cameraFov;
+    frameData.viewInv = XMMatrixTranspose(frameParams.viewInv);
+    frameData.projInv = XMMatrixTranspose(frameParams.projInv);
 
     GPUCommons::DirectionalLightCB lightData;
     lightData.direction = frameParams.direction;

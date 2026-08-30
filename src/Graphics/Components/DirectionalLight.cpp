@@ -8,7 +8,7 @@ using namespace SharedCommons;
 using namespace DirectX;
 
 DirectionalLight::DirectionalLight()
-    : m_direction(LIGHT_DIR), m_diffuse(1, 1, 1, 1), m_ambient(1, 1, 1, 1){
+    : m_direction(LIGHT_DIR), m_diffuse(1, 1, 1, 1), m_ambient(1, 1, 1, 1), m_intensity(5.0f){
     m_lookAt = { 0.0f, 0.0f, 0.0f };
     m_viewMatrix = XMMatrixIdentity();
     m_projectionMatrix = XMMatrixIdentity();
@@ -28,6 +28,12 @@ void DirectionalLight::Init() {
 
 void DirectionalLight::Frame() {
     XMVECTOR dir = XMLoadFloat3(&m_direction);
+    const float length = XMVectorGetX(XMVector3Length(dir));
+    if (length <= 0.0001f) {
+        m_direction = LIGHT_DIR;
+        dir = XMLoadFloat3(&m_direction);
+    }
+
     XMVECTOR upVector = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     dir = XMVector3Normalize(dir);
 
@@ -117,12 +123,15 @@ void DirectionalLight::OnGUI() {
         if (ImGui::SliderFloat3("Direction", &m_direction.x, -1.0f, 1.0f)) {
             XMVECTOR dir = XMLoadFloat3(&m_direction);
 
-            // 0 벡터가 아닐 경우에만 정규화 진행
-            float length = XMVector3Length(dir).m128_f32[0];
-            if (length > 0.0f) {
+            const float length = XMVectorGetX(XMVector3Length(dir));
+            if (length > 0.0001f) {
                 XMStoreFloat3(&m_direction, XMVector3Normalize(dir));
+                Frame();
             }
-            Frame(); // 행렬 갱신
+            else {
+                m_direction = LIGHT_DIR;
+                Frame();
+            }
         }
         ImGui::Spacing();
         ImGui::Separator();

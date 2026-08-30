@@ -1,7 +1,6 @@
-// GPU_ProbeCapturePS.hlsl
+// GPU_GBufferPS.hlsl
 #include "Commons.hlsli"
 #include "GPUDriven.hlsli"
-#include "PBR.hlsli"
 
 struct PS_IN
 {
@@ -13,13 +12,18 @@ struct PS_IN
     float2 texcoord : TEXCOORD;
 }; // PS_IN
 
+struct PS_OUT
+{
+    float4 gbuffer0 : SV_TARGET0; // albedo.rgb, metallic
+    float4 gbuffer1 : SV_TARGET1; // normalWS.xyz, roughness
+}; // PS_OUT
 
-Texture2D                          g_Textures[] : register(t0, space1);
+Texture2D g_Textures[] : register(t0, space1);
 StructuredBuffer<MeshInstanceData> g_InstanceData : register(t1, space0);
-ConstantBuffer<InstanceCB>         g_InstanceCB : register(b2);
-SamplerState                       Sampler : register(s0);
+SamplerState Sampler : register(s0);
+ConstantBuffer<InstanceCB> g_InstanceCB : register(b2);
 
-float4 main(PS_IN input) : SV_TARGET
+PS_OUT main(PS_IN input)
 {
     MeshInstanceData inst = g_InstanceData[g_InstanceCB.InstanceIndex];
 
@@ -39,9 +43,6 @@ float4 main(PS_IN input) : SV_TARGET
     B = cross(N, T);
     float3 normalWS = normalize(T * localNormal.x + B * localNormal.y + N * localNormal.z);
 
-    float3 V = normalize(CAMERA_POSITION - input.positionWS);
-    float3 L = normalize(-LIGHT_DIRECTION);
-
     float metallic = saturate(inst.metallicFactor);
     if (inst.metallicIndex != 0xFFFFFFFF)
         metallic = saturate(g_Textures[NonUniformResourceIndex(inst.metallicIndex)].Sample(Sampler, input.texcoord).r * inst.metallicFactor);
@@ -50,8 +51,8 @@ float4 main(PS_IN input) : SV_TARGET
     if (inst.roughnessIndex != 0xFFFFFFFF)
         roughness = saturate(g_Textures[NonUniformResourceIndex(inst.roughnessIndex)].Sample(Sampler, input.texcoord).r * inst.roughnessFactor);
 
-    float3 directTerm = Evaluate_Direct_PBR(albedoColor.rgb, metallic, roughness, normalWS, V, L, LIGHT_DIFFUSE.rgb, 1.0f);
-    float3 ambientTerm = LIGHT_AMBIENT.rgb * albedoColor.rgb * (1.0f - metallic);
-
-    return float4(ambientTerm + directTerm, albedoColor.a);
+    PS_OUT output;
+    output.gbuffer0 = float4(albedoColor.rgb, metallic);
+    output.gbuffer1 = float4(normalWS * 0.5f + 0.5f, roughness);
+    return output;
 } // main

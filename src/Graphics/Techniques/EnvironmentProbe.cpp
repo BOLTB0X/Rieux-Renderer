@@ -4,8 +4,10 @@
 #include "RendererState.h"
 #include "RenderTextureManager.h"
 #include "RenderTexture.h"
+#include "Transform.h"
 // Utils
 #include "GPUCommons.h"
+#include "imgui.h"
 
 using namespace DirectX;
 
@@ -22,8 +24,9 @@ static const XMVECTOR kFaceUp[6] = {
 };
 
 EnvironmentProbe::EnvironmentProbe()
-    : m_position(0, 0, 0), m_prevCameraPos(0, 0, 0), m_prevCameraDir(0, 0, 0),
+    : m_position(0, 0, 0), m_transform(std::make_unique<Transform>()),
     m_faceSize(256), m_isDirty(true),
+    m_isInitialized(false),
     m_cubemapTexture(nullptr), m_depthTexture(nullptr),
     m_faceViewMatrices{}, m_faceProjMatrix(XMMatrixIdentity()),
     m_mappedFaceFrameCB{} {
@@ -71,20 +74,25 @@ bool EnvironmentProbe::Init(const InitParams& params) {
 void EnvironmentProbe::Frame(const FrameParams& param) {
     m_isDirty = false;
 
-    const float posThreshold = 0.001f;
-    const float dirThreshold = 0.001f;
+    if (!m_isInitialized) {
+        m_transform->SetPosition(param.cameraPos);
+        m_position = m_transform->GetPosition();
+        m_isDirty = true;
+        m_isInitialized = true;
+        UpdateFaceMatrices();
+        return;
+    }
 
-    bool posChanged = (fabsf(param.cameraPos.x - m_prevCameraPos.x) > posThreshold) ||
-        (fabsf(param.cameraPos.y - m_prevCameraPos.y) > posThreshold) ||
-        (fabsf(param.cameraPos.z - m_prevCameraPos.z) > posThreshold);
+    const DirectX::XMFLOAT3 transformPosition = m_transform->GetPosition();
+    const float posThreshold = 0.001f;
+    const bool posChanged =
+        fabsf(transformPosition.x - m_position.x) > posThreshold ||
+        fabsf(transformPosition.y - m_position.y) > posThreshold ||
+        fabsf(transformPosition.z - m_position.z) > posThreshold;
 
     if (posChanged) {
+        m_position = transformPosition;
         m_isDirty = true;
-        SetPosition(param.cameraPos);
-
-        m_prevCameraPos = param.cameraPos;
-        m_prevCameraDir = param.cameraDir;
-
         UpdateFaceMatrices();
     }
 } // Frame
@@ -113,6 +121,18 @@ void EnvironmentProbe::UpdateFaceMatrices() {
 void           EnvironmentProbe::MarkDirty() { m_isDirty = true; }
 bool           EnvironmentProbe::IsDirty() const { return m_isDirty; }
 void           EnvironmentProbe::ClearDirty() { m_isDirty = false; }
+
+void EnvironmentProbe::OnGUI() {
+    DirectX::XMFLOAT3 position = m_transform->GetPosition();
+    if (ImGui::DragFloat3("Position", &position.x, 0.1f)) {
+        m_transform->SetPosition(position);
+    }
+
+    if (ImGui::Button("Generate Probe")) {
+        m_isDirty = true;
+    }
+} // OnGUI
+
 RenderTexture* EnvironmentProbe::GetCubemapTexture() const { return m_cubemapTexture; }
 RenderTexture* EnvironmentProbe::GetDepthTexture() const { return m_depthTexture; }
 UINT           EnvironmentProbe::GetFaceSize() const { return m_faceSize; }

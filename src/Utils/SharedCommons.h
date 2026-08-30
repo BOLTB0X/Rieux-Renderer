@@ -27,7 +27,7 @@ namespace SharedCommons {
     static constexpr float MIN_FOV = 1.0f;
     static constexpr float MAX_FOV = 129.0f;
 
-    static constexpr DirectX::XMFLOAT3 DEFAULT_POSITION = { 0.0f, 0.0f, -5.0f };
+    static constexpr DirectX::XMFLOAT3 DEFAULT_POSITION = { 0.0f, 10.0f, -5.0f };
     static constexpr DirectX::XMFLOAT3 DEFAULT_ROTATION = { 0.0f, 0.0f, 0.0f };
     static constexpr float DEFAULT_FOV = 60.0f;
 	////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,6 @@ namespace SharedCommons {
     static constexpr DirectX::XMFLOAT3 LIGHT_DIR = { 0.0f, -1.0f, 0.0f };
     static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 1.0f, 0.98f, 0.96f, 1.0f };
     static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.45f, 0.45f, 0.45f, 1.0f };
-
 } // CB
 
 namespace SharedCommons {
@@ -99,21 +98,34 @@ namespace SharedCommons {
     static const std::wstring OCCLUSION_CULLING_CS = L"HLSL/OcclusionCullingCS.hlsl";
     static const std::string  OCCLUSION_CULLING_CS_STR = "OcclusionCullingCS";
 
-    inline const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
-    inline const std::string DEBUG_AABB_VS_STR ="DebugAABBVS_str";
-    inline const std::string DEBUG_COLOR_PS_STR = "DebugColorPS_str";
+    static const std::wstring DEBUG_AABB_VS = L"HLSL/DebugAABBVS.hlsl";
+    static const std::string  DEBUG_AABB_VS_STR ="DebugAABBVS_str";
+    static const std::string  DEBUG_COLOR_PS_STR = "DebugColorPS_str";
 
-    inline const std::string KEY_GPU_CSM_SOLID_CULL = "GPU_CSM_SOLID_CULL";
-    inline const std::string KEY_GPU_CSM_ALPHA_NO_CULL = "GPU_CSM_ALPHA_NO_CULL";
+    static const std::wstring CSM_VS = L"HLSL/CascadeShadowVS.hlsl";
+    static const std::string  CSM_VS_STR = "CSM_VS";
 
-    inline const std::wstring CSM_VS = L"HLSL/CascadeShadowVS.hlsl";
-    inline const std::string  CSM_VS_STR = "CSM_VS";
+    static const std::wstring PROBE_PS = L"HLSL/GPU_ProbeCapturePS.hlsl";
+    static const std::string  PROBE_PS_STR = "PROBE_PS";
 
-    inline const std::string KEY_GPU_PROBE_SOLID_CULL = "GPU_PROBE_SOLID_CULL";
-    inline const std::string KEY_GPU_PROBE_ALPHA_NO_CULL = "GPU_PROBE_ALPHA_NO_CULL";
+    static const std::wstring GBUFFER_PS = L"HLSL/GPU_GBufferPS.hlsl";
+    static const std::string  GBUFFER_PS_STR = "GBuffer_PS";
 
-    inline const std::wstring PROBE_PS = L"HLSL/GPU_ProbeCapturePS.hlsl";
-    inline const std::string  PROBE_PS_STR = "PROBE_PS";
+    static const std::wstring PREFILTER_ENVIRONMENT_CS = L"HLSL/PrefilterEnvironmentCS.hlsl";
+    static const std::string  PREFILTER_ENVIRONMENT_CS_STR = "PrefilterEnvironmentCS";
+
+    static const std::wstring BRDF_INTEGRATION_CS = L"HLSL/BRDFIntegrationCS.hlsl";
+    static const std::string  BRDF_INTEGRATION_CS_STR = "BRDFIntegrationCS";
+
+    static const std::wstring IRRADIANCE_CS = L"HLSL/IrradianceConvolutionCS.hlsl";
+    static const std::string  IRRADIANCE_CS_STR = "IrradianceConvolutionCS";
+
+    static const std::wstring DEFERRED_LIGHTING_PS = L"HLSL/GPU_DeferredLightingPS.hlsl";
+    static const std::string  DEFERRED_LIGHTING_PS_STR = "GPU_DeferredLightingPS";
+
+    static const std::wstring ACES_FILM_PS = L"HLSL/ACESFilmPS.hlsl";
+    static const std::string  ACES_FILM_PS_STR = "ACESFilmPS";
+
 } // HLSL
 
 namespace SharedCommons {
@@ -162,11 +174,38 @@ namespace SharedCommons {
     static const std::string KEY_OCCLUSION_CULLING_SIG = "OcclusionCullingCS_SIG";
     static const std::string KEY_OCCLUSION_CULLING_PSO = "OcclusionCullingCS_PSO";
 
-    inline const std::string KEY_DEBUG_AABB_SIG = "DebugAABBSignature";
-    inline const std::string KEY_DEBUG_AABB_PSO = "DebugAABBPso";
-    inline const std::string KEY_DEBUG_LINE_SIG = "DebugLineSignature";
-    inline const std::string KEY_DEBUG_LINE_PSO = "DebugLinePso";
+    static const std::string KEY_BRDF_LUT_RENDER_TEXTURE = "BRDF_LUT";
 
+    static const std::string KEY_DEBUG_AABB_SIG = "DebugAABBSignature";
+    static const std::string KEY_DEBUG_AABB_PSO = "DebugAABBPso";
+    static const std::string KEY_DEBUG_LINE_SIG = "DebugLineSignature";
+    static const std::string KEY_DEBUG_LINE_PSO = "DebugLinePso";
+
+    inline const std::string KEY_GPU_CSM_SOLID_CULL = "GPU_CSM_SOLID_CULL";
+    inline const std::string KEY_GPU_CSM_ALPHA_NO_CULL = "GPU_CSM_ALPHA_NO_CULL";
+
+    inline const std::string KEY_GPU_PROBE_SOLID_CULL = "GPU_PROBE_SOLID_CULL";
+    inline const std::string KEY_GPU_PROBE_ALPHA_NO_CULL = "GPU_PROBE_ALPHA_NO_CULL";
+
+    static const std::string KEY_GBUFFER0_RENDER_TEXTURE = "GBuffer0_RenderTexture";
+    static const std::string KEY_GBUFFER1_RENDER_TEXTURE = "GBuffer1_RenderTexture";
+
+    static const std::string KEY_GBUFFER_SOLID_CULL = "GBuffer_Solid_Cull";
+    static const std::string KEY_GBUFFER_ALPHA_NO_CULL = "GBuffer_Alpha_No_Cull";
+
+    static const std::string KEY_BRDF_INTEGRATION_PSO = "BRDF_Integration_PSO";
+    static const std::string KEY_PREFILTER_ENVIRONMENT_PSO = "PreFilter_Environment_PSO";
+    static const std::string KEY_IRRADIANCE_PSO = "IrradianceConvolutionCS_PSO";
+
+    static const std::string KEY_BRDF_INTEGRATION_SIG = "BRDF_Integration_SIG";
+    static const std::string KEY_PREFILTER_ENVIRONMENT_SIG = "PreFilter_Environment_SIG";
+    static const std::string KEY_IRRADIANCE_SIG = "IrradianceConvolutionCS_SIG";
+
+    static const std::string KEY_DEFERRED_LIGHTING_PSO = "GPU_DeferredLighting_PSO";
+    static const std::string KEY_DEFERRED_LIGHTING_SIG = "GPU_DeferredLighting_SIG";
+
+    static const std::string KEY_TONEMAPPING_SIG = "ToneMapping_PSO";
+    static const std::string KEY_TONEMAPPING_PSO = "ToneMapping_SIG";
 } // MAP - KEY
 
 namespace SharedCommons {
