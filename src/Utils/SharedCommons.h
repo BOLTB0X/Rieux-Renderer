@@ -51,7 +51,7 @@ namespace SharedCommons {
 
 namespace SharedCommons {
     static constexpr DirectX::XMFLOAT3 LIGHT_DIR = { 0.0f, -1.0f, 0.0f };
-    static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 1.0f, 0.98f, 0.96f, 1.0f };
+    static constexpr DirectX::XMFLOAT4 LIGHT_DIFFUSE = { 0.45f, 0.45f, 0.45f, 1.0f };
     static constexpr DirectX::XMFLOAT4 LIGHT_AMBIENT = { 0.45f, 0.45f, 0.45f, 1.0f };
 } // CB
 
@@ -126,6 +126,9 @@ namespace SharedCommons {
     static const std::wstring ACES_FILM_PS = L"HLSL/ACESFilmPS.hlsl";
     static const std::string  ACES_FILM_PS_STR = "ACESFilmPS";
 
+    static const std::wstring SSR_PS = L"HLSL/ScreenSpaceReflectionPS.hlsl";
+    static const std::string  SSR_PS_STR = "ScreenSpaceReflectionPS";
+
 } // HLSL
 
 namespace SharedCommons {
@@ -167,6 +170,7 @@ namespace SharedCommons {
     static const std::string  KEY_DEPTH_RENDER_TEXTURE_DEBUG = "DepthRenderTexture_DeBug";
     static const std::string  KEY_HIZ_DEPTH_RENDER_TEXTURE = "HiZ_Depth";
     static const std::string  KEY_SHADOW_MAP_RENDER_TEXTURE = "ShadowMap_Depth";
+    static const std::string  KEY_SSR_RENDER_TEXTURE = "SSRRenderTexture";
 
     static const std::string  KEY_TRANS_REVERSE_Z_SIG = "Trans_ReverseZ_SIG";
     static const std::string  KEY_TRANS_REVERSE_Z_PSO = "Trans_ReverseZ";
@@ -206,6 +210,9 @@ namespace SharedCommons {
 
     static const std::string KEY_TONEMAPPING_SIG = "ToneMapping_PSO";
     static const std::string KEY_TONEMAPPING_PSO = "ToneMapping_SIG";
+
+    static const std::string KEY_SSR_SIG = "SSR_SIG";
+    static const std::string KEY_SSR_PSO = "SSR_PSO";
 } // MAP - KEY
 
 namespace SharedCommons {

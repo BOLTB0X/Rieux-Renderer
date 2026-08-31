@@ -24,9 +24,9 @@ static const XMVECTOR kFaceUp[6] = {
 };
 
 EnvironmentProbe::EnvironmentProbe()
-    : m_position(0, 0, 0), m_transform(std::make_unique<Transform>()),
+    : m_position(0, 0, 0), m_lastCapturedPos(0.0f, 0.0f, 0.0f), m_transform(std::make_unique<Transform>()),
     m_faceSize(256), m_isDirty(true),
-    m_isInitialized(false),
+    m_isInitialized(false), m_recaptureRadius(50.0f),
     m_cubemapTexture(nullptr), m_depthTexture(nullptr),
     m_faceViewMatrices{}, m_faceProjMatrix(XMMatrixIdentity()),
     m_mappedFaceFrameCB{} {

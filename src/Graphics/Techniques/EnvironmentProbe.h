@@ -67,9 +67,11 @@ private:
     std::array<UINT8*, FACE_COUNT>                                 m_mappedFaceFrameCB;
 
     DirectX::XMFLOAT3                                              m_position;
+    DirectX::XMFLOAT3                                              m_lastCapturedPos;
     std::unique_ptr<Transform>                                     m_transform;
 
     UINT                                                           m_faceSize;
     bool                                                           m_isDirty;
     bool                                                           m_isInitialized;
+    float                                                          m_recaptureRadius;
 }; // EnvironmentProbe

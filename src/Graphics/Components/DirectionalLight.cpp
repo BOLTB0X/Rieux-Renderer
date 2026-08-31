@@ -68,7 +68,15 @@ XMFLOAT3 DirectionalLight::GetPosition() const {
 } // GetPosition
 
 XMFLOAT3 DirectionalLight::GetDirection() const { return m_direction; }
-XMFLOAT4 DirectionalLight::GetDiffuse() const { return m_diffuse; }
+XMFLOAT4 DirectionalLight::GetDiffuse() const {
+    return XMFLOAT4(
+        m_diffuse.x * m_intensity,
+        m_diffuse.y * m_intensity,
+        m_diffuse.z * m_intensity,
+        m_diffuse.w
+    );
+} // GetDiffuse
+
 XMFLOAT4 DirectionalLight::GetAmbient() const { return m_ambient; }
 XMFLOAT3 DirectionalLight::GetLookAt() const { return m_lookAt; }
 XMMATRIX DirectionalLight::GetViewMatrix() const { return m_viewMatrix; }
@@ -111,6 +119,7 @@ void DirectionalLight::OnGUI() {
         m_direction = LIGHT_DIR;
         m_diffuse = LIGHT_DIFFUSE;
         m_ambient = LIGHT_AMBIENT;
+        m_intensity = 5.0f;
         Frame();
     }
 
@@ -142,17 +151,11 @@ void DirectionalLight::OnGUI() {
 
         ImGui::Spacing();
         ImGui::Separator();
-        ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.8f, 1.0f), "[ Light Colors ]");
+        ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.8f, 1.0f), "[ Light Colors & HDR ]");
+        ImGui::DragFloat("Intensity Multiplier", &m_intensity, 0.1f, 0.0f, 50.0f, "%.2f");
 
         ImGuiColorEditFlags hdrFlags = ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float;
-        ImGui::ColorEdit4("Diffuse", &m_diffuse.x, hdrFlags);
-        ImGui::ColorEdit4("Ambient", &m_ambient.x, hdrFlags);
-
-        ImGui::Spacing();
-        ImGui::Separator();
-
-        if (ImGui::DragFloat3("Look At", &m_lookAt.x, 0.1f)) {
-            Frame();
-        }
+        ImGui::ColorEdit4("Diffuse Base", &m_diffuse.x, hdrFlags);
+        ImGui::ColorEdit4("Ambient Base", &m_ambient.x, hdrFlags);
     }
 } // OnGui

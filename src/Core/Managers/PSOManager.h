@@ -57,6 +57,7 @@ private:
     bool BuildGBuffer(const std::string&);
     bool BuildDeferredLighting(const std::string&);
     bool BuildToneMapping(const std::string&);
+    bool BuildScreenSpaceReflection(const std::string&);
 
     bool BuildDebugTransReverseZ(const std::string&);
     bool BuildDebugAABB(const std::string&);

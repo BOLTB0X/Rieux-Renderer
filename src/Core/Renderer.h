@@ -81,6 +81,8 @@ private:
         GPU_QUERY_GBUFFER_END,
         GPU_QUERY_SCENE_BEGIN,
         GPU_QUERY_SCENE_END,
+        GPU_QUERY_SSR_BEGIN,
+        GPU_QUERY_SSR_END,
         GPU_QUERY_IMGUI_BEGIN,
         GPU_QUERY_IMGUI_END,
         GPU_QUERY_COUNT
@@ -107,6 +109,7 @@ private:
     void GBufferPass(ID3D12GraphicsCommandList*);
     void BRDFIntegrationPass(ID3D12GraphicsCommandList*);
     void DeferredLightingPass(ID3D12GraphicsCommandList*);
+    void ScreenSpaceReflectionPass(ID3D12GraphicsCommandList*);
     void ToneMappingPass(ID3D12GraphicsCommandList*);
 
     void OnGUI();

@@ -119,6 +119,11 @@ public: // Screen
 
     static UINT ToneMappingHDRTexIndex;
 
+    static UINT SSRFrameCBIndex;
+    static UINT SSRLitSceneIndex;
+    static UINT SSRDepthIndex;
+    static UINT SSRGBuffer1Index;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 

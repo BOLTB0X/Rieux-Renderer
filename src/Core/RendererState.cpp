@@ -105,6 +105,11 @@ UINT RendererState::DeferredBRDFLUTIndex = 49;
 
 UINT RendererState::ToneMappingHDRTexIndex = 50;
 
+UINT RendererState::SSRFrameCBIndex = 41;
+UINT RendererState::SSRLitSceneIndex = 42;
+UINT RendererState::SSRDepthIndex = 43;
+UINT RendererState::SSRGBuffer1Index = 44;
+
 UINT  RendererState::DebugCameraClipIndex = 11;
 UINT  RendererState::DebugDepthTexIndex = 12;
 
@@ -221,6 +226,8 @@ void RendererState::FrameScene(const FrameParams& frameParams) {
     GPUCommons::FrameCB frameData;
     frameData.view = XMMatrixTranspose(frameParams.view);
     frameData.projection = XMMatrixTranspose(frameParams.projection);
+    frameData.viewInv = XMMatrixTranspose(frameParams.viewInv);
+    frameData.projInv = XMMatrixTranspose(frameParams.projInv);
     frameData.cameraPosition = frameParams.cameraPosition;
     frameData.cameraFov = frameParams.cameraFov;
 

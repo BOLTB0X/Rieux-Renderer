@@ -353,7 +353,7 @@ bool Renderer::LoadSceneRenderTarget(int width, int height) {
     rtParams.sharedDescriptorAllocator = m_sharedDescriptorAllocator.get();
     rtParams.width = width;
     rtParams.height = height;
-    rtParams.colorFormat = RendererState::RTVFormat;
+    rtParams.colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     rtParams.depthFormat = DXGI_FORMAT_D32_FLOAT;
 
     if (!m_SceneRenderTarget->Init(rtParams)) {
@@ -659,6 +659,8 @@ void Renderer::PopulateCommandList() {
     // 오프스크린 타겟 렌더 종료
     m_SceneRenderTarget->EndRender(cmdList);
 
+    ScreenSpaceReflectionPass(cmdList);
+
     // 백버퍼 렌더 타겟 준비 (PRESENT -> RENDER_TARGET)
     CD3DX12_RESOURCE_BARRIER toRTVBarrier = CD3DX12_RESOURCE_BARRIER::Transition(
         m_SwapChain->GetCurrentBackBuffer(),
@@ -857,7 +859,6 @@ void Renderer::DepthPass(ID3D12GraphicsCommandList* cmdList) {
     m_HierarchicalZBuffer->Build(hizParams);
     m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_HIZ_END);
     PIXEndEvent(cmdList);
-
 } // DepthPass
 
 void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
@@ -904,7 +905,7 @@ void Renderer::ShadowPass(ID3D12GraphicsCommandList* cmdList) {
 
         Sponza::SubmitIndirectParams submitParams;
         submitParams.cmdList = cmdList;
-        submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+        submitParams.frameConstantsGPUAddress = m_RendererState->GetSceneFrameCBGPUVirtualAddress();
         submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
         submitParams.cascadeIndex = cascade;
         submitParams.shadowMapDescriptorIndex = UINT_MAX;
@@ -1012,7 +1013,7 @@ void Renderer::GBufferPass(ID3D12GraphicsCommandList* cmdList) {
 
     Sponza::SubmitIndirectParams submitParams;
     submitParams.cmdList = cmdList;
-    submitParams.frameConstantsGPUAddress = m_RendererState->GetFrameCBGPUVirtualAddress();
+    submitParams.frameConstantsGPUAddress = m_RendererState->GetSceneFrameCBGPUVirtualAddress();
     submitParams.lightConstantsGPUAddress = m_RendererState->GetLightCBGPUVirtualAddress();
     submitParams.mainVisibleCommandsBuffer = m_OcclusionCuller->GetFinalMainCommandsBuffer();
     submitParams.mainCounterBuffer = m_OcclusionCuller->GetFinalMainCounterBuffer();
@@ -1060,7 +1061,7 @@ void Renderer::DeferredLightingPass(ID3D12GraphicsCommandList* cmdList) {
     cmdList->SetGraphicsRootSignature(rootSignature);
     cmdList->SetPipelineState(pipelineState->GetPSO());
 
-    cmdList->SetGraphicsRootConstantBufferView(RendererState::DeferredFrameCBIndex, m_RendererState->GetFrameCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::DeferredFrameCBIndex, m_RendererState->GetSceneFrameCBGPUVirtualAddress());
     cmdList->SetGraphicsRootConstantBufferView(RendererState::DeferredLightCBIndex, m_RendererState->GetLightCBGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredGBuffer0Index, m_sharedDescriptorAllocator->GetGPUHandle(gbuffer0->GetSRVIndex()));
     cmdList->SetGraphicsRootDescriptorTable(RendererState::DeferredGBuffer1Index, m_sharedDescriptorAllocator->GetGPUHandle(gbuffer1->GetSRVIndex()));
@@ -1077,9 +1078,48 @@ void Renderer::DeferredLightingPass(ID3D12GraphicsCommandList* cmdList) {
     PIXEndEvent(cmdList);
 } // DeferredLightingPass
 
-void Renderer::ToneMappingPass(ID3D12GraphicsCommandList* cmdList) {
-    //auto hdrTexture = m_SceneRenderTarget->GetColorResource();
+void Renderer::ScreenSpaceReflectionPass(ID3D12GraphicsCommandList* cmdList) {
+    PIXBeginEvent(cmdList, PIX_COLOR(150, 150, 255), L"Screen Space Reflection Pass");
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SSR_BEGIN);
 
+    auto depthTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_DEPTH_RENDER_TEXTURE).get();
+    auto gbuffer1 = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE).get();
+    auto ssrTexture = m_RenderTextureManager->GetRenderTexture(SharedCommons::KEY_SSR_RENDER_TEXTURE).get();
+
+    if (!ssrTexture || !depthTexture || !gbuffer1) {
+        m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SSR_END);
+        PIXEndEvent(cmdList);
+        return;
+    } 
+
+    // SSR 출력 타겟 준비
+    ssrTexture->Transition(cmdList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE ssrRTV = ssrTexture->GetRTVHandle();
+    cmdList->OMSetRenderTargets(1, &ssrRTV, FALSE, nullptr);
+    cmdList->RSSetViewports(1, &m_SwapChain->GetViewport());
+    cmdList->RSSetScissorRects(1, &m_SwapChain->GetScissorRect());
+
+    // PSO 및 Root Signature 세팅
+    cmdList->SetGraphicsRootSignature(m_PSOManager->GetID3D12RootSignature(SharedCommons::KEY_SSR_SIG));
+    cmdList->SetPipelineState(m_PSOManager->GetPSO(SharedCommons::KEY_SSR_PSO)->GetPSO());
+
+    cmdList->SetGraphicsRootConstantBufferView(RendererState::SSRFrameCBIndex, m_RendererState->GetSceneFrameCBGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::SSRLitSceneIndex, m_sharedDescriptorAllocator->GetGPUHandle(m_SceneRenderTarget->GetColorSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::SSRDepthIndex, m_sharedDescriptorAllocator->GetGPUHandle(depthTexture->GetSRVIndex()));
+    cmdList->SetGraphicsRootDescriptorTable(RendererState::SSRGBuffer1Index, m_sharedDescriptorAllocator->GetGPUHandle(gbuffer1->GetSRVIndex()));
+
+    // 풀스크린 쿼드 렌더링
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->DrawInstanced(3, 1, 0, 0);
+
+    ssrTexture->Transition(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    m_GPUMonitor->RecordTimestamp(cmdList, GPU_QUERY_SSR_END);
+    PIXEndEvent(cmdList);
+} // ScreenSpaceReflectionPass
+
+void Renderer::ToneMappingPass(ID3D12GraphicsCommandList* cmdList) {
     cmdList->SetGraphicsRootSignature(
         m_PSOManager->GetID3D12RootSignature(
             SharedCommons::KEY_TONEMAPPING_SIG));
@@ -1091,7 +1131,8 @@ void Renderer::ToneMappingPass(ID3D12GraphicsCommandList* cmdList) {
     cmdList->SetGraphicsRootDescriptorTable(
         RendererState::ToneMappingHDRTexIndex,
         m_sharedDescriptorAllocator->GetGPUHandle(
-            m_SceneRenderTarget->GetColorSRVIndex()));
+            m_RenderTextureManager->GetRenderTexture(
+                SharedCommons::KEY_SSR_RENDER_TEXTURE)->GetSRVIndex()));
 
     cmdList->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
