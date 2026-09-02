@@ -18,20 +18,38 @@ struct Frame
     float2 screenResolution;
     float  time;
     float  framePadding;
+
+    float3 probePosition;
+    float  probeBlendDistance;
+    float3 probeBoxMin;
+    float  padding2;
+    float3 probeBoxMax;
+    float  padding3;
+    
+    float3 influenceBoxMin;
+    float   padding4;
+    float3 influenceBoxMax;
+    float   padding5;
 }; // Frame
 
 ConstantBuffer<Frame> g_FrameCB : register(b0);
 
-#define VIEW              g_FrameCB.view
-#define PROJ              g_FrameCB.projection
-#define VIEW_INV          g_FrameCB.viewInv
-#define PROJ_INV          g_FrameCB.projInv
-#define CAMERA_POSITION   g_FrameCB.cameraPosition
-#define CAMERA_FOV        g_FrameCB.cameraFov
-#define SCREEN_RESOLUTION g_FrameCB.screenResolution
-#define TIME              g_FrameCB.time
+#define VIEW                 g_FrameCB.view
+#define PROJ                 g_FrameCB.projection
+#define VIEW_INV             g_FrameCB.viewInv
+#define PROJ_INV             g_FrameCB.projInv
+#define CAMERA_POSITION      g_FrameCB.cameraPosition
+#define CAMERA_FOV           g_FrameCB.cameraFov
+#define SCREEN_RESOLUTION    g_FrameCB.screenResolution
+#define TIME                 g_FrameCB.time
+#define PROBE_POSITION       g_FrameCB.probePosition
+#define PROBE_BLEND_DISTANCE g_FrameCB.probeBlendDistance
+#define PROBE_BOX_MIN        g_FrameCB.probeBoxMin
+#define PROBE_BOX_MAX        g_FrameCB.probeBoxMax
+#define PROBE_INFLUENCE_MIN  g_FrameCB.influenceBoxMin
+#define PROBE_INFLUENCE_MAX  g_FrameCB.influenceBoxMax
 
-#define MAX_CASCADES 4
+#define MAX_CASCADES         4
 
 struct DirectionalLight
 {

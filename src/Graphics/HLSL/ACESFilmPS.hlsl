@@ -22,8 +22,11 @@ float3 ACESFilm(float3 x)
 float4 main(VS_OUT input) : SV_Target
 {
     float3 hdrColor = HDRTexture.Sample(Sampler, input.uv).rgb;
+    const float exposure = 0.7f;
+    hdrColor *= exposure;
+    
     float3 ldrColor = ACESFilm(hdrColor);
-
+    
     ldrColor = pow(ldrColor, 1.0f / 2.2f);
 
     return float4(ldrColor, 1.0f);

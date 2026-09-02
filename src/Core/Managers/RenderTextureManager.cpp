@@ -121,6 +121,15 @@ bool RenderTextureManager::Init(const InitParams& params) {
     }
     m_renderTextures[SharedCommons::KEY_GBUFFER1_RENDER_TEXTURE] = gbuffer1;
 
+    auto ssrTex = std::make_shared<RenderTexture>();
+    RenderTexture::InitParams ssrParams = gb0Params;
+    ssrParams.format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+    if (!ssrTex->Init(ssrParams)) {
+        DebugPrint("RenderTexture 생성 실패: " + SharedCommons::KEY_SSR_RENDER_TEXTURE);
+        return false;
+    }
+    m_renderTextures[SharedCommons::KEY_SSR_RENDER_TEXTURE] = ssrTex;
     return true;
 } // Init
 

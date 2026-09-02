@@ -119,6 +119,11 @@ public: // Screen
 
     static UINT ToneMappingHDRTexIndex;
 
+    static UINT SSRFrameCBIndex;
+    static UINT SSRLitSceneIndex;
+    static UINT SSRDepthIndex;
+    static UINT SSRGBuffer1Index;
+
     static UINT DebugCameraClipIndex;
     static UINT DebugDepthTexIndex;
 
@@ -174,6 +179,12 @@ public:
         float             cameraFov;
         DirectX::XMFLOAT2 screenResolution;
         float             time;
+        DirectX::XMFLOAT3 probePosition;
+        float             probeBlendDistance;
+        DirectX::XMFLOAT3 probeBoxMin;
+        DirectX::XMFLOAT3 probeBoxMax;
+        DirectX::XMFLOAT3 influenceBoxMin;
+        DirectX::XMFLOAT3 influenceBoxMax;
         DirectX::XMFLOAT3 direction;
         DirectX::XMFLOAT4 ambient;
         DirectX::XMFLOAT4 diffuse;

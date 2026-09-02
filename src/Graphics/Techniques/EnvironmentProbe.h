@@ -15,8 +15,8 @@ public:
     static const UINT FACE_COUNT = 6;
 
     struct InitParams {
-        ID3D12Device* device;
-        RenderTextureManager* renderTextureManager;
+        ID3D12Device*            device;
+        RenderTextureManager*    renderTextureManager;
         DescriptorHeapAllocator* sharedDescriptorAllocator;
         UINT                     faceSize;
         DXGI_FORMAT              format;
@@ -53,6 +53,12 @@ public:
     RenderTexture*            GetDepthTexture() const;
     D3D12_GPU_VIRTUAL_ADDRESS GetFaceFrameCBGPUAddress(UINT face) const;
     UINT                      GetFaceSize() const;
+    DirectX::XMFLOAT3         GetPosition() const;
+    DirectX::XMFLOAT3         GetProjectionBoxMin() const;
+    DirectX::XMFLOAT3         GetProjectionBoxMax() const;
+    DirectX::XMFLOAT3         GetInfluenceBoxMin() const;
+    DirectX::XMFLOAT3         GetInfluenceBoxMax() const;
+    float                     GetBlendDistance() const;
 
 private:
     void SetPosition(const DirectX::XMFLOAT3&);
@@ -67,9 +73,16 @@ private:
     std::array<UINT8*, FACE_COUNT>                                 m_mappedFaceFrameCB;
 
     DirectX::XMFLOAT3                                              m_position;
+    DirectX::XMFLOAT3                                              m_projectionBoxMin;
+    DirectX::XMFLOAT3                                              m_projectionBoxMax;
+    DirectX::XMFLOAT3                                              m_influenceBoxMin;
+    DirectX::XMFLOAT3                                              m_influenceBoxMax;
+    DirectX::XMFLOAT3                                              m_lastCapturedPos;
     std::unique_ptr<Transform>                                     m_transform;
 
     UINT                                                           m_faceSize;
     bool                                                           m_isDirty;
     bool                                                           m_isInitialized;
+    float                                                          m_recaptureRadius;
+    float                                                          m_blendDistance;
 }; // EnvironmentProbe

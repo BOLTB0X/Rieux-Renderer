@@ -217,55 +217,59 @@ void AssimpLoader::ProcessMaterials(const aiScene* scene, const std::string& dir
         aiMat->Get(AI_MATKEY_NAME, name);
         material.name = name.C_Str();
 
-        material.albedo = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE, PBRTextureType::Albedo);
-        if (!material.albedo) {
-            material.albedo = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
+        float defaultRoughness = SharedCommons::ROUGH_FACTOR;
+        float defaultMetallic = 0.0f;
+
+        // 대소문자 구분을 없애기 위해 소문자로 변환하여 검사
+        std::string lowerName = material.name;
+        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+
+        if (lowerName.find("floor") != std::string::npos) {
+            defaultRoughness = 0.05f; // 바닥(floor)은 매우 매끄럽게
         }
-        aiColor4D baseColor(SharedCommons::ALBEDO_FACTOR.x, SharedCommons::ALBEDO_FACTOR.y,
-            SharedCommons::ALBEDO_FACTOR.z, SharedCommons::ALBEDO_FACTOR.w);
+        else if (lowerName.find("fabric") != std::string::npos ||
+            lowerName.find("curtain") != std::string::npos ||
+            lowerName.find("leaf") != std::string::npos) {
+            defaultRoughness = 0.95f;
+        }
+        else if (lowerName.find("chain") != std::string::npos ||
+            lowerName.find("flagpole") != std::string::npos) {
+            defaultRoughness = 0.3f;
+            defaultMetallic = 1.0f;
+        }
+        else if (lowerName.find("vase") != std::string::npos) {
+            defaultRoughness = 0.7f;
+        }
+        else {
+            defaultRoughness = 0.8f;
+        }
+
+        material.albedo = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE, PBRTextureType::Albedo);
+        if (!material.albedo) material.albedo = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
+
+        aiColor4D baseColor(SharedCommons::ALBEDO_FACTOR.x, SharedCommons::ALBEDO_FACTOR.y, SharedCommons::ALBEDO_FACTOR.z, SharedCommons::ALBEDO_FACTOR.w);
         aiMat->Get(AI_MATKEY_COLOR_DIFFUSE, baseColor);
         material.albedoFactor = { baseColor.r, baseColor.g, baseColor.b, baseColor.a };
 
         material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_DISPLACEMENT, PBRTextureType::Normal);
-        if (!material.normal) {
-            material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_NORMALS, PBRTextureType::Normal);
-        }
-        if (!material.normal) {
-            material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_HEIGHT, PBRTextureType::Normal);
-        }
-        if (!material.normal) {
-            material.normal = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_NORMAL);
-        }
+        if (!material.normal) material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_NORMALS, PBRTextureType::Normal);
+        if (!material.normal) material.normal = LoadMaterialElement(aiMat, directory, aiTextureType_HEIGHT, PBRTextureType::Normal);
+        if (!material.normal) material.normal = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_NORMAL);
 
         material.alpha = LoadMaterialElement(aiMat, directory, aiTextureType_OPACITY, PBRTextureType::Alpha);
-        if (!material.alpha) {
-            material.alpha = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
-        }
+        if (!material.alpha) material.alpha = m_TextureManager->GetTexture(SharedCommons::KEY_DUMMEY_WHITE);
 
         material.roughness = LoadMaterialElement(aiMat, directory, aiTextureType_DIFFUSE_ROUGHNESS, PBRTextureType::Roughness);
         if (!material.roughness) {
-            float rgh = 0.8f;
-            if (aiMat->Get(AI_MATKEY_ROUGHNESS_FACTOR, rgh) != AI_SUCCESS) {
-                material.roughnessFactor = SharedCommons::ROUGH_FACTOR;
-            }
-            else {
-                material.roughnessFactor = rgh;
-            }
+            material.roughnessFactor = defaultRoughness;
         }
         else {
             material.roughnessFactor = 1.0f;
         }
 
-        // Metallic (MTL PBR Extension: map_Pm)
         material.metallic = LoadMaterialElement(aiMat, directory, aiTextureType_METALNESS, PBRTextureType::Metallic);
         if (!material.metallic) {
-            float met = 0.0f;
-            if (aiMat->Get(AI_MATKEY_METALLIC_FACTOR, met) != AI_SUCCESS) {
-                material.metallicFactor = 0.0f;
-            }
-            else {
-                material.metallicFactor = met;
-            }
+            material.metallicFactor = defaultMetallic;
         }
         else {
             material.metallicFactor = 1.0f;
