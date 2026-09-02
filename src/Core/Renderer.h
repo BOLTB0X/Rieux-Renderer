@@ -17,7 +17,6 @@ class D3D12RootSignature;
 class D3D12PipelineState;
 class RenderTarget;
 class PSOManager;
-class RenderQueue;
 class Camera;
 class FrustumCuller;
 class HierarchicalZBuffer;
@@ -79,8 +78,8 @@ private:
         GPU_QUERY_OCCLUSION_PHASE2_END,
         GPU_QUERY_GBUFFER_BEGIN,
         GPU_QUERY_GBUFFER_END,
-        GPU_QUERY_SCENE_BEGIN,
-        GPU_QUERY_SCENE_END,
+        GPU_QUERY_DEFERRED_BEGIN,
+        GPU_QUERY_DEFERRED_END,
         GPU_QUERY_SSR_BEGIN,
         GPU_QUERY_SSR_END,
         GPU_QUERY_IMGUI_BEGIN,
@@ -93,6 +92,7 @@ private:
     bool LoadPipeline(HWND, int, int);
     bool LoadSceneRenderTarget(int, int);
     bool LoadAssets(HWND);
+    bool LoadTechniques(HWND);
     bool LoadGUIs(HWND, std::shared_ptr<ImGuiManager>);
 
 private:
@@ -130,7 +130,6 @@ private:
     // --------------------------------------------------
     std::unique_ptr<RendererState>           m_RendererState;
     std::unique_ptr<RendererDebugger>        m_RendererDebugger;
-    std::unique_ptr<RenderQueue>             m_RenderQueue;
     std::unique_ptr<Camera>                  m_SceneCamera;
     std::unique_ptr<Camera>                  m_MasterCamera;
     std::unique_ptr<DirectionalLight>        m_DirectionalLight;

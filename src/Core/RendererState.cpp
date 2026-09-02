@@ -145,6 +145,9 @@ RendererState::FrameParams::FrameParams() :
     cameraPosition(0.0f, 0.0f, 0.0f), cameraFov(0.0f),
     screenResolution((float)SharedCommons::SCREEN_WIDTH, (float)SharedCommons::SCREEN_HEIGHT),
     time(0.0f),
+    probePosition(0.0f, 0.0f, 0.0f), probeBlendDistance(20.0f),
+    probeBoxMin(-700.0f, -700.0f, -700.0f), probeBoxMax(700.0f, 700.0f, 700.0f),
+    influenceBoxMin(-700.0f, -700.0f, -700.0f), influenceBoxMax(700.0f, 700.0f, 700.0f),
     direction(0.0f, -1.0f, 0.0f),
     ambient(0.2f, 0.2f, 0.2f, 1.0f),
     diffuse(1.0f, 1.0f, 1.0f, 1.0f),
@@ -196,6 +199,12 @@ void RendererState::Frame(const FrameParams& frameParams) {
     frameData.cameraFov = frameParams.cameraFov;
     frameData.viewInv = XMMatrixTranspose(frameParams.viewInv);
     frameData.projInv = XMMatrixTranspose(frameParams.projInv);
+    frameData.probePosition = frameParams.probePosition;
+    frameData.probeBlendDistance = frameParams.probeBlendDistance;
+    frameData.probeBoxMin = frameParams.probeBoxMin;
+    frameData.probeBoxMax = frameParams.probeBoxMax;
+	frameData.influenceBoxMin = frameParams.influenceBoxMin;
+	frameData.influenceBoxMax = frameParams.influenceBoxMax;
 
     GPUCommons::DirectionalLightCB lightData;
     lightData.direction = frameParams.direction;
@@ -230,6 +239,12 @@ void RendererState::FrameScene(const FrameParams& frameParams) {
     frameData.projInv = XMMatrixTranspose(frameParams.projInv);
     frameData.cameraPosition = frameParams.cameraPosition;
     frameData.cameraFov = frameParams.cameraFov;
+    frameData.probePosition = frameParams.probePosition;
+    frameData.probeBlendDistance = frameParams.probeBlendDistance;
+    frameData.probeBoxMin = frameParams.probeBoxMin;
+    frameData.probeBoxMax = frameParams.probeBoxMax;
+	frameData.influenceBoxMin = frameParams.influenceBoxMin;
+	frameData.influenceBoxMax = frameParams.influenceBoxMax;
 
     if (m_mappedSceneFrameCB) {
         memcpy(m_mappedSceneFrameCB, &frameData, sizeof(GPUCommons::FrameCB));

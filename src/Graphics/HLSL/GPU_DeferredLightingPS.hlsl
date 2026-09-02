@@ -3,9 +3,9 @@
 #include "PBR.hlsli"
 #include "ShadowMap.hlsli"
 
-Texture2D<float4>   g_GBuffer0 : register(t0); // Albedo.rgb, Metallic.a
-Texture2D<float4>   g_GBuffer1 : register(t1); // NormalWS(*0.5+0.5).rgb, Roughness.a
-Texture2D<float>    g_Depth : register(t4); // Reverse-Z 깊이
+Texture2D<float4>   g_GBuffer0 : register(t0);
+Texture2D<float4>   g_GBuffer1 : register(t1);
+Texture2D<float>    g_Depth : register(t4);
 TextureCube<float4> g_IrradianceMap : register(t5);
 TextureCube<float4> g_PrefilteredMap : register(t6);
 Texture2D<float2>   g_BRDFLUT : register(t7);
@@ -42,10 +42,10 @@ float3 ParallaxCorrection(float3 dir, float3 positionWS, float3 probePosition, f
     return intersectPosition - probePosition;
 } // ParallaxCorrection
 
-float CalculateProbeWeight(float3 positionWS, float3 boxMin, float3 boxMax, float blendDistance)
+float CalculateProbeWeight(float3 positionWS, float3 influenceMin, float3 influenceMax, float blendDistance)
 {
-    float3 fadeMin = smoothstep(boxMin, boxMin + blendDistance, positionWS);
-    float3 fadeMax = smoothstep(boxMax, boxMax - blendDistance, positionWS);
+    float3 fadeMin = smoothstep(influenceMin, influenceMin + blendDistance, positionWS);
+    float3 fadeMax = 1.0f - smoothstep(influenceMax - blendDistance, influenceMax, positionWS);
     
     float3 fade = fadeMin * fadeMax;
     return fade.x * fade.y * fade.z;
@@ -77,37 +77,34 @@ float4 main(PS_IN input) : SV_TARGET
     float3 directTerm = Evaluate_Direct_PBR(
         albedo, metallic, roughness, N, V, L, LIGHT_DIFFUSE.rgb, shadowFactor);
     
-    float3 probePos = float3(0.0f, 10.0f, -5.0f);
-
-    // Probe Volume
-    float3 probeExtent = float3(
-        700.0f, // X
-        700.0f, // Y
-        700.0f // Z
-    );
-
-    float3 boxMin = probePos - probeExtent;
-    float3 boxMax = probePos + probeExtent;
+    float3 probePos = PROBE_POSITION;
     
-    float probeWeight = CalculateProbeWeight(positionWS, boxMin, boxMax, 20.0f);
+    // 시차 보정용 (Projection Box)
+    float3 projBoxMin = PROBE_BOX_MIN;
+    float3 projBoxMax = PROBE_BOX_MAX;
+    
+    // 블렌딩용 (Influence Box) - 새로 추가된 매크로
+    float3 influenceBoxMin = PROBE_INFLUENCE_MIN;
+    float3 influenceBoxMax = PROBE_INFLUENCE_MAX;
+    
+    float probeWeight = CalculateProbeWeight(positionWS, influenceBoxMin, influenceBoxMax, PROBE_BLEND_DISTANCE);
 
     // --- IBL Diffuse ---
     float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metallic);
     float3 kS = Fresnel_Schlick(saturate(dot(N, V)), F0);
     float3 kD = (1.0f - kS) * (1.0f - metallic);
     
-    float3 correctedN = ParallaxCorrection(N, positionWS, probePos, boxMin, boxMax);
+    float3 correctedN = ParallaxCorrection(N, positionWS, probePos, projBoxMin, projBoxMax);
     float3 irradiance = g_IrradianceMap.Sample(LinearSampler, correctedN).rgb;
     float3 diffuseIBL = kD * albedo * irradiance;
 
-    // --- IBL Specular (Split-Sum) ---
+    // --- IBL Specular ---
     float3 R = reflect(-V, N);
-    float3 correctedR = ParallaxCorrection(R, positionWS, probePos, boxMin, boxMax);
+    float3 correctedR = ParallaxCorrection(R, positionWS, probePos, projBoxMin, projBoxMax);
     
     const float MAX_PREFILTER_MIP = 4.0f;
     const float SSR_ROUGHNESS_CUTOFF = 0.35f;
     
-    // R 대신 correctedR 사용
     float3 prefilteredColor = g_PrefilteredMap.SampleLevel(LinearSampler, correctedR, roughness * MAX_PREFILTER_MIP).rgb;
     float2 brdf = g_BRDFLUT.Sample(LinearSampler, float2(saturate(dot(N, V)), roughness));
     float3 specularIBL = prefilteredColor * (F0 * brdf.x + brdf.y);
@@ -118,9 +115,13 @@ float4 main(PS_IN input) : SV_TARGET
         specularIBL *= lerp(0.15f, 1.0f, ssrFadeWeight);
     }
 
-    //float3 ambientIBL = (diffuseIBL + specularIBL) * probeWeight;
+    // 최종 환경광 계산 및 적용
     float3 ambientIBL = (diffuseIBL + specularIBL) * shadowFactor;
+    float3 globalAmbient = albedo * LIGHT_AMBIENT.rgb * shadowFactor;
     
-    float3 finalColor = directTerm + ambientIBL;
+    float3 finalAmbient = lerp(globalAmbient, ambientIBL, probeWeight);
+    float3 finalColor = directTerm + finalAmbient;
+    
+    //return float4(probeWeight.xxx, 1.0f);
     return float4(finalColor, 1.0f);
 } // main

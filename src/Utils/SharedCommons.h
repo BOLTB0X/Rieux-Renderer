@@ -47,6 +47,14 @@ namespace SharedCommons {
 
     ///////////////////////////////////////////////////////////////////////////////////////
 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    static constexpr DirectX::XMFLOAT3 PROJ_BOX_MIN = { -1500.0f, -100.0f, -350.0f };
+    static constexpr DirectX::XMFLOAT3 PROJ_BOX_MAX = {1500.0f, 1500.0f, 350.0f };
+
+    static constexpr DirectX::XMFLOAT3 INFLUENCE_BOX_MIN = { -1300.0f, -100.0f, -330.0f };
+    static constexpr DirectX::XMFLOAT3 INFLUENCE_BOX_MAX = { 1300.0f, 1250.0f, 330.0f };
+
+    ///////////////////////////////////////////////////////////////////////////////////////
 } // SharedCommons
 
 namespace SharedCommons {

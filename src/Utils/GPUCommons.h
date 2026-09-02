@@ -158,6 +158,19 @@ namespace GPUCommons {
         float             time;
         float             padding;
 
+        DirectX::XMFLOAT3 probePosition;
+        float             probeBlendDistance;
+
+        DirectX::XMFLOAT3 probeBoxMin;
+        float             padding2;
+        DirectX::XMFLOAT3 probeBoxMax;
+        float             padding3;
+
+        DirectX::XMFLOAT3 influenceBoxMin;
+        float             padding4;
+        DirectX::XMFLOAT3 influenceBoxMax;
+        float             padding5;
+
         FrameCB() :
             view(DirectX::XMMatrixIdentity()),
             projection(DirectX::XMMatrixIdentity()),
@@ -165,7 +178,12 @@ namespace GPUCommons {
             projInv(DirectX::XMMatrixIdentity()),
             cameraPosition(0.0f, 0.0f, 0.0f), cameraFov(0.0f),
             screenResolution((float)SharedCommons::SCREEN_WIDTH, (float)SharedCommons::SCREEN_HEIGHT),
-            time(0.0f), padding(0.0f) {
+            time(0.0f), padding(0.0f),
+            probePosition(0.0f, 0.0f, 0.0f), probeBlendDistance(20.0f),
+            probeBoxMin(-700.0f, -700.0f, -700.0f), padding2(0.0f),
+            probeBoxMax(700.0f, 700.0f, 700.0f), padding3(0.0f),
+            influenceBoxMin(-700.0f, -700.0f, -700.0f), padding4(0.0f),
+            influenceBoxMax(700.0f, 700.0f, 700.0f), padding5(0.0f) {
         }
     }; // FrameCB
 

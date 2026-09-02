@@ -8,8 +8,10 @@
 // Utils
 #include "GPUCommons.h"
 #include "imgui.h"
+#include "SharedCommons.h"
 
 using namespace DirectX;
+using namespace SharedCommons;
 
 static const XMVECTOR kFaceForward[6] = {
     XMVectorSet(1, 0, 0, 0), XMVectorSet(-1, 0, 0, 0),
@@ -27,6 +29,11 @@ EnvironmentProbe::EnvironmentProbe()
     : m_position(0, 0, 0), m_lastCapturedPos(0.0f, 0.0f, 0.0f), m_transform(std::make_unique<Transform>()),
     m_faceSize(256), m_isDirty(true),
     m_isInitialized(false), m_recaptureRadius(50.0f),
+    m_projectionBoxMin(PROJ_BOX_MIN),
+    m_projectionBoxMax(PROJ_BOX_MAX),
+    m_influenceBoxMin(INFLUENCE_BOX_MIN),
+	m_influenceBoxMax(INFLUENCE_BOX_MAX),
+    m_blendDistance(30.0f),
     m_cubemapTexture(nullptr), m_depthTexture(nullptr),
     m_faceViewMatrices{}, m_faceProjMatrix(XMMatrixIdentity()),
     m_mappedFaceFrameCB{} {
@@ -128,6 +135,33 @@ void EnvironmentProbe::OnGUI() {
         m_transform->SetPosition(position);
     }
 
+    ImGui::Separator();
+    ImGui::Text("Projection Box");
+    bool projectionChanged = false;
+    projectionChanged |= ImGui::DragFloat3("Projection Min", &m_projectionBoxMin.x, 0.1f);
+    projectionChanged |= ImGui::DragFloat3("Projection Max", &m_projectionBoxMax.x, 0.1f);
+
+    ImGui::Text("Influence Box");
+    bool influenceChanged = false;
+    influenceChanged |= ImGui::DragFloat3("Influence Min", &m_influenceBoxMin.x, 0.1f);
+    influenceChanged |= ImGui::DragFloat3("Influence Max", &m_influenceBoxMax.x, 0.1f);
+
+    if (projectionChanged || influenceChanged) {
+        m_projectionBoxMin.x = std::min(m_projectionBoxMin.x, m_projectionBoxMax.x);
+        m_projectionBoxMin.y = std::min(m_projectionBoxMin.y, m_projectionBoxMax.y);
+        m_projectionBoxMin.z = std::min(m_projectionBoxMin.z, m_projectionBoxMax.z);
+        m_projectionBoxMax.x = std::max(m_projectionBoxMin.x, m_projectionBoxMax.x);
+        m_projectionBoxMax.y = std::max(m_projectionBoxMin.y, m_projectionBoxMax.y);
+        m_projectionBoxMax.z = std::max(m_projectionBoxMin.z, m_projectionBoxMax.z);
+
+        m_influenceBoxMin.x = std::min(m_influenceBoxMin.x, m_influenceBoxMax.x);
+        m_influenceBoxMin.y = std::min(m_influenceBoxMin.y, m_influenceBoxMax.y);
+        m_influenceBoxMin.z = std::min(m_influenceBoxMin.z, m_influenceBoxMax.z);
+        m_influenceBoxMax.x = std::max(m_influenceBoxMin.x, m_influenceBoxMax.x);
+        m_influenceBoxMax.y = std::max(m_influenceBoxMin.y, m_influenceBoxMax.y);
+        m_influenceBoxMax.z = std::max(m_influenceBoxMin.z, m_influenceBoxMax.z);
+    }
+
     if (ImGui::Button("Generate Probe")) {
         m_isDirty = true;
     }
@@ -136,6 +170,12 @@ void EnvironmentProbe::OnGUI() {
 RenderTexture* EnvironmentProbe::GetCubemapTexture() const { return m_cubemapTexture; }
 RenderTexture* EnvironmentProbe::GetDepthTexture() const { return m_depthTexture; }
 UINT           EnvironmentProbe::GetFaceSize() const { return m_faceSize; }
+XMFLOAT3       EnvironmentProbe::GetPosition() const { return m_position; }
+XMFLOAT3       EnvironmentProbe::GetProjectionBoxMin() const { return m_projectionBoxMin; }
+XMFLOAT3       EnvironmentProbe::GetProjectionBoxMax() const { return m_projectionBoxMax; }
+XMFLOAT3       EnvironmentProbe::GetInfluenceBoxMin() const { return m_influenceBoxMin; }
+XMFLOAT3       EnvironmentProbe::GetInfluenceBoxMax() const { return m_influenceBoxMax; }
+float          EnvironmentProbe::GetBlendDistance() const { return m_blendDistance; }
 
 D3D12_GPU_VIRTUAL_ADDRESS EnvironmentProbe::GetFaceFrameCBGPUAddress(UINT face) const {
     return m_faceFrameCB[face]->GetGPUVirtualAddress();

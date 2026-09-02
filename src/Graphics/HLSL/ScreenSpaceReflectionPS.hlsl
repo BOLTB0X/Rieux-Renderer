@@ -46,15 +46,19 @@ float4 main(VS_OUT input) : SV_TARGET
     float3 viewNormal = GetViewNormal(uv);
     float3 viewPos = GetViewPosition(uv, depth);
 
-    float3 viewDir = normalize(viewPos);
-    float3 reflectDir = normalize(reflect(viewDir, viewNormal));
+    float3 viewDir = normalize(-viewPos);
+    float3 reflectDir = normalize(reflect(-viewDir, viewNormal));
 
-    if (reflectDir.z < 0.0f)
+    if (reflectDir.z <= 0.0f || dot(reflectDir, viewNormal) <= 0.0f)
         return float4(sceneColor, 1.0f);
 
-    float3 rayPos = viewPos + viewNormal + reflectDir;
+    float surfaceBias = max(0.01f, abs(viewPos.z) * 0.001f);
+    float3 rayPos = viewPos + viewNormal * surfaceBias;
 
-    float stepSize = 0.2f;
+    const float initialStepSize = 0.5f;
+    const float maxTraceDistance = initialStepSize * 64.0f;
+    float stepSize = initialStepSize;
+    float traveledDistance = 0.0f;
     int maxSteps = 64;
 
     bool hit = false;
@@ -63,8 +67,15 @@ float4 main(VS_OUT input) : SV_TARGET
     for (int i = 0; i < maxSteps; ++i)
     {
         rayPos += reflectDir * stepSize;
+        traveledDistance += stepSize;
+
+        if (traveledDistance > maxTraceDistance)
+            break;
 
         float4 clipPos = mul(float4(rayPos, 1.0f), PROJ);
+        if (clipPos.w <= 0.0f)
+            break;
+
         float2 sampleUV = (clipPos.xy / clipPos.w) * 0.5f + 0.5f;
         sampleUV.y = 1.0f - sampleUV.y;
 
@@ -93,6 +104,12 @@ float4 main(VS_OUT input) : SV_TARGET
                 sampleUV.y = 1.0f - sampleUV.y;
 
                 sampleDepth = DepthTex.SampleLevel(PointClampSampler, sampleUV, 0).r;
+                if (sampleDepth <= 0.0f)
+                {
+                    stepSize *= 0.5f;
+                    continue;
+                }
+
                 sampleViewPos = GetViewPosition(sampleUV, sampleDepth);
 
                 if (rayPos.z - sampleViewPos.z > 0.0f)
@@ -118,7 +135,9 @@ float4 main(VS_OUT input) : SV_TARGET
         float3 hitColor = LitSceneTex.SampleLevel(LinearClampSampler, hitUV, 0).rgb;
         float2 fade = smoothstep(0.0f, 0.1f, hitUV) * (1.0f - smoothstep(0.9f, 1.0f, hitUV));
         float screenEdgeFade = fade.x * fade.y;
-        float reflectionStrength = (1.0f - roughness) * screenEdgeFade;
+        float hitDistance = length(rayPos - viewPos);
+        float distanceFade = saturate(1.0f - hitDistance / maxTraceDistance);
+        float reflectionStrength = saturate((1.0f - roughness) * screenEdgeFade * distanceFade);
         return float4(lerp(sceneColor, hitColor, reflectionStrength), 1.0f);
     }
 
