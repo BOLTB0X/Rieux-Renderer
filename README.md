@@ -1,7 +1,7 @@
 ## Deferred Light Rendering(PBR)
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR07.png?raw=true" width="300" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR07.png?raw=true" width="450" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> Deferred Lighting Rendering </strong></p>
 </div>
@@ -63,7 +63,8 @@ Screen Space Reflection ← Scene Color를 반사 소스로 재활용
 #### 2) **G-Buffer Pass — MRT 기록**
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/IBL/IBL04_G%EB%B2%84%ED%8D%BC.png?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/IBL/IBL04_G%EB%B2%84%ED%8D%BC.png?raw=true" width="350" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/SSR/t_%ED%94%84%EB%A1%9C%EB%B8%8C%EB%B2%94%EC%9C%84.png?raw=true" width="350" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> G-Buffers </strong></p>
 </div>
