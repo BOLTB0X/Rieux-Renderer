@@ -1,7 +1,7 @@
 ## Deferred Light Rendering(PBR)
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR07.png?raw=true" width="450" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR07.png?raw=true" width="550" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> Deferred Lighting Rendering </strong></p>
 </div>
