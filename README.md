@@ -1,7 +1,7 @@
 ### 3.6 Screen Space Reflection
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/SSR/04.png?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/SSR/04.png?raw=true" width="500" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> SSR </strong></p>
 </div>
