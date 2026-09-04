@@ -1,8 +1,8 @@
 ## Frustum Culling & Backface/No-Cull 분리
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/02_GPU%ED%94%84%EB%9F%AC%EC%8A%A4%ED%85%8000.png?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/t_%EB%B0%94%EC%9A%B4%EB%94%A9%EB%B0%95%EC%8A%A4.png?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/02_GPU%ED%94%84%EB%9F%AC%EC%8A%A4%ED%85%8000.png?raw=true" width="300" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/t_%EB%B0%94%EC%9A%B4%EB%94%A9%EB%B0%95%EC%8A%A4.png?raw=true" width="300" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> Frustum Culling | AABB 박스 </strong></p>
 </div>
