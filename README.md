@@ -1,8 +1,8 @@
 # Two Phase Occlusion Culling
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Two_Phase_Occlusion_Culling/Two_Phase_Occlusion_Culling02_masterScene01.gif?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/06_Occlusion%20Culling03.png?raw=true" width="250" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Two_Phase_Occlusion_Culling/Two_Phase_Occlusion_Culling02_masterScene01.gif?raw=true" width="330" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/GPU_Driven/06_Occlusion%20Culling03.png?raw=true" width="330" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong> Occlusion Culling </strong></p>
 </div>
