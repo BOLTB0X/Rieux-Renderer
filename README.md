@@ -1,7 +1,7 @@
 # DX12 - Rieux Renderer
 
 <div align="center">
-  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/SSR/03.png?raw=true" width="500" style="border:1px solid #ddd; border-radius:4px;" />
+  <img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/RieuxRenderer01.png?raw=true" width="500" style="border:1px solid #ddd; border-radius:4px;" />
   <br>
   <p><strong>✊😐 DirectX 12 GPU Driven Rendering For Sponza </strong></p>
 </div>
@@ -13,7 +13,7 @@
   <td><img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR05.png?raw=true" width="320"></td>
   </tr>
   <tr>
-  <td><img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/RieuxRenderer01.png?raw=true" width="320"></td>
+  <td><img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/SSR/03.png?raw=true" width="320"></td>
   <td><img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR06.png?raw=true" width="320"></td>
   <td><img src="https://github.com/BOLTB0X/DirectX-Playground/blob/main/DemoGIF/DX12-Renderer/Deferred/PBR01.png?raw=true" width="320"></td>
   </tr>
